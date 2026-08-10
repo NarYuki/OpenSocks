@@ -5,7 +5,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'api.dart';
+import 'l10n/app_localizations.dart';
 import 'connection_store.dart';
+
+extension LocalizedContext on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+}
 
 void main() => runApp(const OpenSocksApp());
 
@@ -20,6 +25,7 @@ class OpenSocksApp extends StatelessWidget {
     cupertino: (_, _) =>
         const CupertinoAppData(debugShowCheckedModeBanner: false),
     localizationsDelegates: const [
+      AppLocalizations.delegate,
       GlobalMaterialLocalizations.delegate,
       GlobalCupertinoLocalizations.delegate,
       GlobalWidgetsLocalizations.delegate,
@@ -198,25 +204,25 @@ class _PairPageState extends State<PairPage> {
                 const SizedBox(height: 16),
                 Text('OpenSocks', style: Theme.of(c).textTheme.headlineLarge),
                 const SizedBox(height: 8),
-                const Text('LuCIの「スマホ連携」に表示されたURLとトークンを入力してください。'),
+                Text(c.l10n.pairHelp),
                 const SizedBox(height: 28),
                 TextField(
                   controller: url,
                   keyboardType: TextInputType.url,
-                  decoration: const InputDecoration(
-                    labelText: 'ルーターURL',
-                    prefixIcon: Icon(Icons.link),
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: c.l10n.routerUrl,
+                    prefixIcon: const Icon(Icons.link),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: token,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '連携トークン',
-                    prefixIcon: Icon(Icons.key),
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: c.l10n.pairToken,
+                    prefixIcon: const Icon(Icons.key),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 if (error != null)
@@ -236,7 +242,7 @@ class _PairPageState extends State<PairPage> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.link),
-                  label: const Text('接続'),
+                  label: Text(c.l10n.connect),
                 ),
               ],
             ),
@@ -288,26 +294,26 @@ class _HomePageState extends State<HomePage> {
       onTap: (v) => setState(() => index = v),
       selectedItemColor: Theme.of(c).colorScheme.primary,
       bottomNavigationBar: _androidNavigation(c),
-      items: const [
+      items: [
         AdaptiveNavigationDestination(
           icon: 'house',
           selectedIcon: 'house.fill',
-          label: '接続',
+          label: c.l10n.connect,
         ),
         AdaptiveNavigationDestination(
           icon: 'chart.bar',
           selectedIcon: 'chart.bar.fill',
-          label: '通信',
+          label: c.l10n.traffic,
         ),
         AdaptiveNavigationDestination(
           icon: 'speedometer',
           selectedIcon: 'speedometer',
-          label: 'テスト',
+          label: c.l10n.test,
         ),
         AdaptiveNavigationDestination(
           icon: 'person',
           selectedIcon: 'person.fill',
-          label: 'アカウント',
+          label: c.l10n.account,
         ),
       ],
     ),
@@ -338,26 +344,26 @@ class _HomePageState extends State<HomePage> {
             indicatorColor: colors.primaryContainer,
             selectedIndex: index,
             onDestinationSelected: (v) => setState(() => index = v),
-            destinations: const [
+            destinations: [
               NavigationDestination(
                 icon: Icon(Icons.power_settings_new_outlined),
                 selectedIcon: Icon(Icons.power_settings_new_rounded),
-                label: '接続',
+                label: c.l10n.connect,
               ),
               NavigationDestination(
                 icon: Icon(Icons.bar_chart_outlined),
                 selectedIcon: Icon(Icons.bar_chart_rounded),
-                label: '通信',
+                label: c.l10n.traffic,
               ),
               NavigationDestination(
                 icon: Icon(Icons.speed_outlined),
                 selectedIcon: Icon(Icons.speed_rounded),
-                label: 'テスト',
+                label: c.l10n.test,
               ),
               NavigationDestination(
                 icon: Icon(Icons.person_outline_rounded),
                 selectedIcon: Icon(Icons.person_rounded),
-                label: 'アカウント',
+                label: c.l10n.account,
               ),
             ],
           ),
@@ -454,9 +460,15 @@ class _OverviewPageState extends State<OverviewPage> {
   Future<void> action(String p, [Map<String, dynamic>? b]) async {
     final connecting = p == 'connect';
     final switching = connecting && s?['running'] == true;
+    final l = context.l10n;
     final stages = connecting
-        ? ['認証中', switching ? '切替中' : '接続中', 'ネットワーク構成中', 'インターフェース処理中']
-        : ['切断処理中', 'インターフェース処理中'];
+        ? [
+            l.authenticating,
+            switching ? l.switching : l.connecting,
+            l.networkConfig,
+            l.interfaceProcessing,
+          ]
+        : [l.disconnecting, l.interfaceProcessing];
     var stage = 0;
     setState(() {
       busy = true;
@@ -472,7 +484,7 @@ class _OverviewPageState extends State<OverviewPage> {
       await widget.api.post(p, b);
       await refreshUntilSettled(expectRunning: connecting);
       if (mounted) {
-        setState(() => operation = connecting ? '接続完了' : '切断完了');
+        setState(() => operation = connecting ? l.connected : l.disconnected);
         toast(context, operation);
         await Future<void>.delayed(const Duration(milliseconds: 900));
       }
@@ -522,7 +534,7 @@ class _OverviewPageState extends State<OverviewPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'ルーティングモード',
+                sheetContext.l10n.routingMode,
                 style: Theme.of(
                   sheetContext,
                 ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
@@ -530,8 +542,8 @@ class _OverviewPageState extends State<OverviewPage> {
               const SizedBox(height: 8),
               ListTile(
                 selected: current == 'smart',
-                title: const Text('スマートルーティング'),
-                subtitle: const Text('中国向け通信だけをOpenSocksへ送信'),
+                title: Text(sheetContext.l10n.smartRouting),
+                subtitle: Text(sheetContext.l10n.smartDescription),
                 leading: const Icon(Icons.alt_route_rounded),
                 trailing: current == 'smart'
                     ? const Icon(Icons.check_circle_rounded)
@@ -540,8 +552,8 @@ class _OverviewPageState extends State<OverviewPage> {
               ),
               ListTile(
                 selected: current == 'global',
-                title: const Text('フル中国回線ルーティング'),
-                subtitle: const Text('LANのWeb通信全体をOpenSocksへ送信'),
+                title: Text(sheetContext.l10n.globalRouting),
+                subtitle: Text(sheetContext.l10n.globalDescription),
                 leading: const Icon(Icons.public_rounded),
                 trailing: current == 'global'
                     ? const Icon(Icons.check_circle_rounded)
@@ -559,12 +571,13 @@ class _OverviewPageState extends State<OverviewPage> {
 
   Future<void> applyRoutingMode(String mode) async {
     final current = s!;
+    final l = context.l10n;
     setState(() {
       busy = true;
-      operation = 'ルーティングモード変更中';
+      operation = l.changingMode;
     });
     var stage = 0;
-    const stages = ['ルーティングモード変更中', 'ネットワーク構成中', 'インターフェース処理中'];
+    final stages = [l.changingMode, l.networkConfig, l.interfaceProcessing];
     final progress = Timer.periodic(const Duration(milliseconds: 700), (_) {
       if (!mounted || stage >= stages.length - 1) {
         return;
@@ -586,7 +599,7 @@ class _OverviewPageState extends State<OverviewPage> {
         'exclude_cidrs': current['excludeCIDRs'] ?? '',
       });
       await refreshUntilSettled(expectRunning: current['running'] == true);
-      if (mounted) toast(context, 'ルーティングモードを変更しました');
+      if (mounted) toast(context, l.modeChanged);
     } catch (e) {
       if (mounted) toast(context, e, true);
     } finally {
@@ -635,7 +648,9 @@ class _OverviewPageState extends State<OverviewPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    x['running'] == true ? '保護されています' : '未接続',
+                    x['running'] == true
+                        ? c.l10n.protected
+                        : c.l10n.notConnected,
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -706,7 +721,11 @@ class _OverviewPageState extends State<OverviewPage> {
           const SizedBox(height: 22),
           Center(
             child: Text(
-              busy ? operation : (x['running'] == true ? '接続完了' : 'タップして接続'),
+              busy
+                  ? operation
+                  : (x['running'] == true
+                        ? c.l10n.connected
+                        : c.l10n.tapToConnect),
               style: Theme.of(
                 c,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
@@ -717,7 +736,7 @@ class _OverviewPageState extends State<OverviewPage> {
             child: TextButton.icon(
               onPressed: busy ? null : chooseServer,
               icon: const Icon(Icons.dns_rounded, size: 18),
-              label: Text(x['lineName'] ?? 'サーバーを選択'),
+              label: Text(x['lineName'] ?? c.l10n.selectServer),
             ),
           ),
           const SizedBox(height: 28),
@@ -747,17 +766,17 @@ class _OverviewPageState extends State<OverviewPage> {
                         children: [
                           Text(
                             x['mode'] == 'global'
-                                ? 'フル中国回線ルーティング'
-                                : 'スマートルーティング',
+                                ? c.l10n.globalRouting
+                                : c.l10n.smartRouting,
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             x['running'] != true
-                                ? 'ネットワーク経路は停止中です'
+                                ? c.l10n.routeStopped
                                 : x['routingApplied'] == true
-                                ? 'ネットワーク経路は正常です'
-                                : 'ネットワーク経路を復元中',
+                                ? c.l10n.routeHealthy
+                                : c.l10n.routeRestoring,
                             style: TextStyle(
                               fontSize: 12,
                               color: x['running'] != true
@@ -850,11 +869,11 @@ class AccountCard extends StatelessWidget {
   Widget build(BuildContext c) => Card(
     child: ListTile(
       leading: const Icon(Icons.account_circle),
-      title: Text(account?['nick'] ?? '未ログイン'),
+      title: Text(account?['nick'] ?? c.l10n.notSignedIn),
       subtitle: Text(
         account == null
             ? '-'
-            : '${account!['email'] ?? account!['phone'] ?? ''} · 残り${account!['remaining_days'] ?? '-'}日',
+            : '${account!['email'] ?? account!['phone'] ?? ''} · ${c.l10n.daysLeft('${account!['remaining_days'] ?? '-'}')}',
       ),
     ),
   );
@@ -903,11 +922,12 @@ class _LinesPageState extends State<LinesPage> {
 
   Future<void> connect(dynamic id) async {
     final switching = currentID != null;
+    final l = context.l10n;
     final stages = [
-      '認証中',
-      switching ? '切替中' : '接続中',
-      'ネットワーク構成中',
-      'インターフェース処理中',
+      l.authenticating,
+      switching ? l.switching : l.connecting,
+      l.networkConfig,
+      l.interfaceProcessing,
     ];
     var stage = 0;
     setState(() {
@@ -930,8 +950,8 @@ class _LinesPageState extends State<LinesPage> {
         });
       }
       if (mounted) {
-        setState(() => operation = '接続完了');
-        toast(context, '接続完了');
+        setState(() => operation = l.connected);
+        toast(context, l.connected);
         await Future<void>.delayed(const Duration(milliseconds: 900));
       }
     } catch (e) {
@@ -955,8 +975,8 @@ class _LinesPageState extends State<LinesPage> {
         TabBar(
           dividerColor: Colors.transparent,
           tabs: [
-            Tab(text: 'サーバー (${lines.length})'),
-            Tab(text: '履歴 (${history.length})'),
+            Tab(text: c.l10n.serversCount(lines.length)),
+            Tab(text: c.l10n.historyCount(history.length)),
           ],
         ),
         if (switchingID != null)
@@ -992,9 +1012,9 @@ class _LinesPageState extends State<LinesPage> {
                   children: [
                     Row(
                       children: [
-                        const Expanded(
+                        Expanded(
                           child: Text(
-                            'サーバー一覧',
+                            c.l10n.serverList,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -1015,7 +1035,7 @@ class _LinesPageState extends State<LinesPage> {
                       Padding(
                         padding: EdgeInsets.symmetric(vertical: 8),
                         child: Text(
-                          '全サーバーのPingを測定しています…',
+                          c.l10n.measuringAllPing,
                           style: TextStyle(
                             fontSize: 12,
                             color: Theme.of(c).colorScheme.onSurfaceVariant,
@@ -1025,9 +1045,9 @@ class _LinesPageState extends State<LinesPage> {
                     ],
                     const SizedBox(height: 6),
                     if (!loading && lines.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(40),
-                        child: Center(child: Text('サーバーを取得できませんでした')),
+                      Padding(
+                        padding: const EdgeInsets.all(40),
+                        child: Center(child: Text(c.l10n.serversUnavailable)),
                       ),
                     ...lines.map((l) {
                       final latency = (l['latency_ms'] as num?)?.toDouble();
@@ -1121,7 +1141,9 @@ class _LinesPageState extends State<LinesPage> {
                                     ),
                                   if (!switching)
                                     Text(
-                                      selected ? '接続中' : '接続',
+                                      selected
+                                          ? c.l10n.connecting
+                                          : c.l10n.connect,
                                       style: TextStyle(
                                         fontSize: 11,
                                         color: Theme.of(
@@ -1166,7 +1188,9 @@ class _LinesPageState extends State<LinesPage> {
                                 await widget.api.post('reconnect', {
                                   'id': h['id'],
                                 });
-                                if (mounted) toast(context, '再接続しました');
+                                if (mounted) {
+                                  toast(context, context.l10n.reconnected);
+                                }
                               } catch (e) {
                                 if (mounted) toast(context, e, true);
                               }
@@ -1244,13 +1268,17 @@ class _TrafficPageState extends State<TrafficPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '累積 ↑ ${bytes(d['up_bytes'] ?? 0)} / ↓ ${bytes(d['down_bytes'] ?? 0)} / Σ ${bytes(d['total_bytes'] ?? 0)}',
+                  c.l10n.cumulativeTraffic(
+                    bytes(d['up_bytes'] ?? 0),
+                    bytes(d['down_bytes'] ?? 0),
+                    bytes(d['total_bytes'] ?? 0),
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        const ListTile(title: Text('中国サービス別トラフィック')),
+        ListTile(title: Text(c.l10n.chinaServiceTraffic)),
         for (final e in services)
           Card(
             child: ListTile(
@@ -1378,7 +1406,7 @@ class _TestsPageState extends State<TestsPage> {
               FilledButton.tonalIcon(
                 onPressed: busy ? null : regionTest,
                 icon: const Icon(Icons.location_searching),
-                label: const Text('中国経路・IP健全度テスト'),
+                label: Text(c.l10n.chinaRouteTest),
               ),
               if (region != null) ...[
                 const SizedBox(height: 12),
@@ -1389,7 +1417,7 @@ class _TestsPageState extends State<TestsPage> {
                   'IP ${region!['address']} · ${region!['isp']} · ${region!['asn']}',
                 ),
                 Text(
-                  '健全度 ${region!['health_score']}/100 · Risk ${region!['risk_score']} · Proxy ${region!['proxy']}',
+                  '${c.l10n.health} ${region!['health_score']}/100 · Risk ${region!['risk_score']} · Proxy ${region!['proxy']}',
                 ),
                 Text(
                   '${region!['provider'] ?? ''} / ${region!['organization'] ?? ''}',
@@ -1512,8 +1540,8 @@ class _TestsPageState extends State<TestsPage> {
                                     const SizedBox(height: 6),
                                     Text(
                                       ooklaID == null && cnID == null
-                                          ? 'サーバーを選択'
-                                          : 'タップして測定',
+                                          ? c.l10n.selectServer
+                                          : c.l10n.tapToTest,
                                     ),
                                   ],
                           ),
@@ -1535,11 +1563,11 @@ class _TestsPageState extends State<TestsPage> {
               subtitle: Text(
                 cnID != null
                     ? 'speedtest.cn'
-                    : (ooklaID != null ? 'Ookla' : '未選択'),
+                    : (ooklaID != null ? 'Ookla' : c.l10n.notSelected),
               ),
               trailing: TextButton(
                 onPressed: busy ? null : chooseSpeedServer,
-                child: const Text('サーバー変更'),
+                child: Text(c.l10n.changeServer),
               ),
               onTap: busy ? null : chooseSpeedServer,
             ),
@@ -1560,7 +1588,7 @@ class _TestsPageState extends State<TestsPage> {
         if ('${x['id']}' == ooklaID) selected = x;
       }
     }
-    if (selected == null) return 'サーバーを選択';
+    if (selected == null) return context.l10n.selectServer;
     return '${selected['province'] ?? selected['name'] ?? ''} ${selected['city'] ?? ''} · ${selected['operator'] ?? selected['sponsor'] ?? ''}';
   }
 
@@ -1592,9 +1620,9 @@ class _TestsPageState extends State<TestsPage> {
                     child: TextField(
                       controller: search,
                       onChanged: (_) => modalSetState(() {}),
-                      decoration: const InputDecoration(
-                        hintText: '測定ノード名・地域・事業者を検索',
-                        prefixIcon: Icon(Icons.search_rounded),
+                      decoration: InputDecoration(
+                        hintText: context.l10n.searchTestNode,
+                        prefixIcon: const Icon(Icons.search_rounded),
                       ),
                     ),
                   ),
@@ -1604,7 +1632,7 @@ class _TestsPageState extends State<TestsPage> {
                     Padding(
                       padding: const EdgeInsets.all(12),
                       child: Text(
-                        'サーバー取得エラー: ${snapshot.error}',
+                        context.l10n.serverFetchError('${snapshot.error}'),
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.error,
                         ),
@@ -1813,11 +1841,6 @@ class SpeedGaugePainter extends CustomPainter {
             ],
           ).createShader(needleBounds),
       );
-      canvas.drawCircle(
-        center,
-        8,
-        Paint()..color = textColor.withValues(alpha: .78),
-      );
     }
 
     const labels = ['0', '5', '10', '50', '100', '250', '500', '1000'];
@@ -2016,7 +2039,7 @@ class _AccountPageState extends State<AccountPage> {
       await widget.api.post(p, b);
       pass.clear();
       await load();
-      if (mounted) toast(context, '完了しました');
+      if (mounted) toast(context, context.l10n.completed);
     } catch (e) {
       if (mounted) toast(context, e, true);
     } finally {
@@ -2053,15 +2076,15 @@ class _AccountPageState extends State<AccountPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              account?['nick'] ?? '未ログイン',
+                              account?['nick'] ?? c.l10n.notSignedIn,
                               style: Theme.of(c).textTheme.titleLarge?.copyWith(
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
                             Text(
                               status?['vip'] == true
-                                  ? 'VIP ACCOUNT'
-                                  : 'FREE ACCOUNT',
+                                  ? c.l10n.vipAccount
+                                  : c.l10n.freeAccount,
                               style: TextStyle(
                                 color: Theme.of(c).colorScheme.primary,
                                 fontWeight: FontWeight.w700,
@@ -2076,32 +2099,34 @@ class _AccountPageState extends State<AccountPage> {
                   _accountRow(
                     c,
                     Icons.mail_outline,
-                    'メール',
+                    c.l10n.email,
                     '${account?['email'] ?? '-'}',
                   ),
                   _accountRow(
                     c,
                     Icons.phone_outlined,
-                    '電話番号',
+                    c.l10n.phone,
                     '${account?['phone'] ?? '-'}',
                   ),
                   _accountRow(
                     c,
                     Icons.event_outlined,
-                    '有効期限',
+                    c.l10n.expires,
                     '${account?['expire_at'] ?? '-'}',
                   ),
                   _accountRow(
                     c,
                     Icons.timelapse_rounded,
-                    '残り日数',
-                    '${account?['remaining_days'] ?? '-'}日',
+                    c.l10n.remainingDays,
+                    c.l10n.daysLeft('${account?['remaining_days'] ?? '-'}'),
                   ),
                   _accountRow(
                     c,
                     Icons.key_rounded,
-                    '認証情報',
-                    status?['credentialsSaved'] == true ? '保存済み' : '未保存',
+                    c.l10n.credentials,
+                    status?['credentialsSaved'] == true
+                        ? c.l10n.saved
+                        : c.l10n.notSaved,
                   ),
                 ],
               ),
@@ -2109,7 +2134,7 @@ class _AccountPageState extends State<AccountPage> {
           ),
           const SizedBox(height: 16),
           Text(
-            'ログイン管理',
+            c.l10n.loginManagement,
             style: Theme.of(
               c,
             ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
@@ -2117,18 +2142,18 @@ class _AccountPageState extends State<AccountPage> {
           const SizedBox(height: 10),
           TextField(
             controller: user,
-            decoration: const InputDecoration(
-              labelText: 'メールアドレス / ユーザー名',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: c.l10n.username,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: pass,
             obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'パスワード',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: c.l10n.password,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
@@ -2140,15 +2165,15 @@ class _AccountPageState extends State<AccountPage> {
                     'password': pass.text,
                   }),
             icon: const Icon(Icons.login),
-            label: const Text('ログイン'),
+            label: Text(c.l10n.login),
           ),
           OutlinedButton(
             onPressed: busy ? null : () => act('register'),
-            child: const Text('匿名無料登録'),
+            child: Text(c.l10n.anonymousRegister),
           ),
           OutlinedButton(
             onPressed: busy ? null : () => act('logout'),
-            child: const Text('ログアウト'),
+            child: Text(c.l10n.logout),
           ),
         ],
       ),
