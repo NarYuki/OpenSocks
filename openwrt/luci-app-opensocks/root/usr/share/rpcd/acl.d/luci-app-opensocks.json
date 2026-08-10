@@ -1,0 +1,20 @@
+{
+    "version": 1,
+    "metadata": {
+        "depends": {}
+    },
+    "luci-app-opensocks": {
+        "title": "OpenSocks",
+        "description": "OpenSocks VPN management",
+        "read": {
+            "ubus": {
+                "luci": [ "getAll" ]
+            }
+        },
+        "write": {
+            "ubus": {
+                "file": [ "/etc/config/opensocks" ]
+            }
+        }
+    }
+}

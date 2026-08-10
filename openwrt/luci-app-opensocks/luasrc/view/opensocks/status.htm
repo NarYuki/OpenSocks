@@ -1,0 +1,131 @@
+<%+header%>
+
+<style>
+.os-wrap{max-width:1180px}.os-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid #555;margin:12px 0 18px}.os-tab{border:0;border-radius:5px 5px 0 0;padding:9px 16px;cursor:pointer;background:#333;color:#ddd}.os-tab.active{background:#1677a5;color:#fff}.os-pane{display:none}.os-pane.active{display:block}.os-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:16px}.os-card{border:1px solid #555;border-radius:6px;padding:14px;background:rgba(255,255,255,.035)}.os-label{font-size:.85em;opacity:.75;margin-bottom:5px}.os-value{font-size:1.2em;font-weight:600;overflow-wrap:anywhere}.os-good{color:#38b878}.os-bad{color:#e45b5b}.os-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.os-table-wrap{overflow-x:auto}.os-table{width:100%;border-collapse:collapse}.os-table th,.os-table td{padding:9px 8px;border-bottom:1px solid #444;text-align:left;white-space:nowrap}.os-form{display:grid;grid-template-columns:minmax(160px,260px) minmax(220px,520px);gap:10px 16px;align-items:center}.os-form input[type=text],.os-form input[type=password],.os-form select{width:100%;box-sizing:border-box}.os-note{padding:11px;border-left:4px solid #1677a5;background:rgba(22,119,165,.12);margin:12px 0}.os-msg{display:none;padding:11px;border-radius:4px;margin:12px 0;background:#245f39}.os-msg.error{background:#7b2c2c}.os-empty{text-align:center;opacity:.7;padding:24px!important}@media(max-width:700px){.os-form{grid-template-columns:1fr}.os-table th,.os-table td{padding:7px 5px}.os-tab{padding:8px 10px}}
+</style>
+<style>.os-form textarea{width:100%;box-sizing:border-box;min-height:76px;font-family:monospace}</style>
+
+<div class="cbi-map os-wrap">
+ <h2>OpenSocks</h2>
+ <div id="os-msg" class="os-msg"></div>
+ <div class="os-tabs" role="tablist">
+  <button class="os-tab active" data-tab="overview"><%:Overview%></button>
+  <button class="os-tab" data-tab="lines"><%:Servers%></button>
+  <button class="os-tab" data-tab="traffic"><%:Traffic%></button>
+  <button class="os-tab" data-tab="test"><%:Tests%></button>
+  <button class="os-tab" data-tab="history"><%:Connection history%></button>
+  <button class="os-tab" data-tab="account"><%:Account%></button>
+  <button class="os-tab" data-tab="settings"><%:Settings%></button>
+ </div>
+
+ <section id="os-pane-overview" class="os-pane active">
+  <div class="os-grid">
+   <div class="os-card"><div class="os-label"><%:Connection status%></div><div id="os-state" class="os-value">…</div></div>
+   <div class="os-card"><div class="os-label"><%:Current server%></div><div id="os-line" class="os-value">…</div></div>
+   <div class="os-card"><div class="os-label"><%:Routing mode%></div><div id="os-mode" class="os-value">…</div></div>
+   <div class="os-card"><div class="os-label"><%:Engine%></div><div id="os-engine" class="os-value">…</div></div>
+   <div class="os-card"><div class="os-label"><%:Network integration%></div><div id="os-network" class="os-value">…</div></div>
+   <div class="os-card"><div class="os-label"><%:Realtime China traffic%></div><div id="os-traffic-overview" class="os-value">↑ 0 bps / ↓ 0 bps</div></div>
+  </div>
+  <div class="os-actions">
+   <button class="cbi-button cbi-button-apply" id="os-connect"><%:Connect%></button>
+   <button class="cbi-button cbi-button-reset" id="os-disconnect"><%:Disconnect%></button>
+  </div>
+  <h3><%:One-tap network setup%></h3>
+  <div class="os-note"><%:Automatically detects the LAN bridge, configures the low-memory engine and installs an isolated nftables routing table. Existing LAN and WAN settings are preserved.%></div>
+  <div class="os-actions">
+   <button class="cbi-button cbi-button-action" id="os-setup-smart"><%:Set up smart China routing%></button>
+   <button class="cbi-button cbi-button-apply" id="os-setup-global"><%:Configure full China routing%></button>
+  </div>
+  <h3><%:China route test%></h3><div class="os-actions"><button class="cbi-button cbi-button-action" id="os-region-test"><%:Test actual exit region%></button><span id="os-region-result">-</span></div>
+ </section>
+
+ <section id="os-pane-traffic" class="os-pane">
+  <div class="os-grid">
+   <div class="os-card"><div class="os-label"><%:Realtime China traffic%></div><div id="os-traffic" class="os-value">↑ 0 bps / ↓ 0 bps</div></div>
+   <div class="os-card"><div class="os-label"><%:Accumulated China traffic%></div><div id="os-traffic-total" class="os-value">↑ 0 B / ↓ 0 B / Σ 0 B</div></div>
+  </div>
+  <h3><%:Traffic by China service%></h3><div class="os-table-wrap"><table class="os-table"><thead><tr><th>#</th><th><%:Service%></th><th>↑</th><th>↓</th><th><%:Total%></th></tr></thead><tbody id="os-services-body"><tr><td colspan="5" class="os-empty">-</td></tr></tbody></table></div>
+ </section>
+
+ <section id="os-pane-test" class="os-pane">
+  <h3>Ookla Speedtest — <%:China mainland servers%></h3>
+  <div class="os-note"><%:The lightweight client tests through the currently connected China route using a fixed 32 KiB memory buffer.%></div>
+  <div class="os-form"><label for="os-speed-server"><%:Test server%></label><select id="os-speed-server"><option value=""><%:Loading…%></option></select></div>
+  <div class="os-actions"><button class="cbi-button cbi-button-action" id="os-speed-refresh"><%:Refresh servers%></button><button class="cbi-button cbi-button-apply" id="os-speed-run"><%:Start speed test%></button><span id="os-speed-state">-</span></div>
+  <div class="os-grid"><div class="os-card"><div class="os-label">Ping</div><div id="os-speed-ping" class="os-value">-</div></div><div class="os-card"><div class="os-label">Download</div><div id="os-speed-down" class="os-value">-</div></div><div class="os-card"><div class="os-label">Upload</div><div id="os-speed-up" class="os-value">-</div></div></div>
+  <h3>SpeedTest.cn — <%:China mainland servers%></h3>
+  <div class="os-note"><%:Runs the official SpeedTest.cn public node protocol through the current China route.%></div>
+  <div class="os-form"><label for="os-speedcn-server"><%:Test server%></label><select id="os-speedcn-server"><option value=""><%:Loading…%></option></select></div>
+  <div class="os-actions"><button class="cbi-button cbi-button-action" id="os-speedcn-refresh"><%:Refresh servers%></button><button class="cbi-button cbi-button-apply" id="os-speedcn-run"><%:Start speed test%></button><span id="os-speedcn-state">-</span></div>
+  <div class="os-grid"><div class="os-card"><div class="os-label">Ping</div><div id="os-speedcn-ping" class="os-value">-</div></div><div class="os-card"><div class="os-label">Download</div><div id="os-speedcn-down" class="os-value">-</div></div><div class="os-card"><div class="os-label">Upload</div><div id="os-speedcn-up" class="os-value">-</div></div></div>
+ </section>
+
+ <section id="os-pane-lines" class="os-pane">
+  <div class="os-actions"><button class="cbi-button cbi-button-action" id="os-refresh-lines"><%:Refresh%></button><button class="cbi-button cbi-button-apply" id="os-sort-ping"><%:Measure ping and sort%></button><span id="os-ping-progress"></span></div>
+  <div class="os-table-wrap"><table class="os-table"><thead><tr><th>ID</th><th><%:Name%></th><th><%:Region%></th><th><%:Type%></th><th>Ping</th><th><%:Action%></th></tr></thead><tbody id="os-lines-body"><tr><td colspan="6" class="os-empty"><%:Loading…%></td></tr></tbody></table></div>
+ </section>
+
+ <section id="os-pane-history" class="os-pane">
+  <div class="os-actions"><button class="cbi-button cbi-button-action" id="os-refresh-history"><%:Refresh%></button></div>
+  <div class="os-table-wrap"><table class="os-table"><thead><tr><th><%:Time%></th><th><%:Server%></th><th><%:Region%></th><th><%:Endpoint%></th><th><%:Action%></th></tr></thead><tbody id="os-history-body"><tr><td colspan="5" class="os-empty"><%:Loading…%></td></tr></tbody></table></div>
+ </section>
+
+ <section id="os-pane-account" class="os-pane">
+  <div class="os-grid"><div class="os-card"><div class="os-label"><%:Signed-in account%></div><div id="os-account-name" class="os-value">…</div></div><div class="os-card"><div class="os-label"><%:Subscription expiry%></div><div id="os-account-expiry" class="os-value">…</div></div><div class="os-card"><div class="os-label"><%:Automatic sign-in%></div><div id="os-credentials" class="os-value">…</div></div></div>
+  <div class="os-form"><label for="os-username"><%:Email or username%></label><input type="text" id="os-username" autocomplete="username"><label for="os-password"><%:Password%></label><input type="password" id="os-password" autocomplete="current-password"></div>
+  <div class="os-actions"><button class="cbi-button cbi-button-apply" id="os-login"><%:Sign in and save%></button><button class="cbi-button cbi-button-reset" id="os-logout"><%:Sign out and delete saved credentials%></button></div>
+ </section>
+
+ <section id="os-pane-settings" class="os-pane">
+  <div class="os-form">
+   <label for="os-cfg-mode"><%:Routing mode%></label><select id="os-cfg-mode"><option value="smart"><%:Smart — only China destinations%></option><option value="global"><%:Full China routing%></option></select>
+   <span><%:Lightweight engine%></span><span>ss-redir + nftables (TCP)</span>
+   <label for="os-cfg-free"><%:Show free servers only%></label><span><input type="checkbox" id="os-cfg-free"> <small id="os-free-note"></small></span>
+   <label for="os-cfg-auto"><%:Connect automatically at boot%></label><input type="checkbox" id="os-cfg-auto">
+   <label for="os-cfg-autoroute"><%:Restore routing automatically%></label><input type="checkbox" id="os-cfg-autoroute">
+   <label for="os-cfg-region"><%:Region filter%></label><input type="text" id="os-cfg-region" placeholder="Shanghai / Japan / …">
+   <label for="os-cfg-exregions"><%:Excluded server regions%></label><input type="text" id="os-cfg-exregions" placeholder="Hong Kong, Japan">
+   <label for="os-cfg-indomains"><%:Always route domains%></label><textarea id="os-cfg-indomains" placeholder="example.cn"></textarea>
+   <label for="os-cfg-exdomains"><%:Never route domains%></label><textarea id="os-cfg-exdomains" placeholder="example.com"></textarea>
+   <label for="os-cfg-incidrs"><%:Always route IPv4 CIDRs%></label><textarea id="os-cfg-incidrs" placeholder="1.2.3.0/24"></textarea>
+   <label for="os-cfg-excidrs"><%:Never route IPv4 CIDRs%></label><textarea id="os-cfg-excidrs" placeholder="1.2.3.0/24"></textarea>
+  </div>
+  <div class="os-actions"><button class="cbi-button cbi-button-apply" id="os-save"><%:Save settings%></button></div>
+ </section>
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+(function(){"use strict";
+ var BASE='<%=url("admin/services/opensocks")%>/';
+ var T={connected:'<%:Connected%>',disconnected:'<%:Disconnected%>',yes:'<%:Enabled%>',no:'<%:Disabled%>',loading:'<%:Loading…%>',failed:'<%:Request failed%>',connect:'<%:Connect%>',reconnect:'<%:Reconnect%>',free:'<%:Free%>',vip:'VIP',applied:'<%:Applied%>',notApplied:'<%:Not applied%>',vipHide:'<%:Free servers are hidden for active VIP accounts.%>',region:'<%:Region%>',operator:'<%:Operator%>',ip:'<%:Exit IP%>',health:'<%:IP health%>',asn:'ASN',provider:'<%:Provider%>',good:'<%:Good%>',warning:'<%:Warning%>',poor:'<%:Poor%>',unknown:'<%:Unknown%>',risk:'<%:Risk%>',proxy:'Proxy'};
+ function el(id){return document.getElementById(id)}
+ function msg(text,error){var n=el('os-msg');n.textContent=text;n.className='os-msg'+(error?' error':'');n.style.display='block'}
+ function api(path,options){options=options||{};return fetch(BASE+path,{method:options.method||'GET',headers:{'Content-Type':'application/json'},body:options.body?JSON.stringify(options.body):undefined,credentials:'same-origin'}).then(function(r){return r.text().then(function(t){var j;try{j=JSON.parse(t)}catch(e){throw new Error('HTTP '+r.status+': '+t.slice(0,160))}if(!r.ok||j.error)throw new Error(j.error||('HTTP '+r.status));return j})})}
+ function setStatus(s){el('os-state').textContent=s.running?T.connected:T.disconnected;el('os-state').className='os-value '+(s.running?'os-good':'os-bad');el('os-line').textContent=s.lineName||'-';el('os-mode').textContent=s.mode||'-';el('os-engine').textContent=s.engine||'-';el('os-network').textContent=(s.routingApplied?T.applied:T.notApplied)+' / '+(s.lanDevice||'-');el('os-network').className='os-value '+(s.routingApplied?'os-good':'os-bad');el('os-cfg-mode').value=s.mode||'smart';el('os-cfg-free').checked=s.vip?false:!!s.freeOnly;el('os-cfg-free').disabled=!!s.vip;el('os-free-note').textContent=s.vip?T.vipHide:'';el('os-cfg-auto').checked=!!s.autoConnect;el('os-cfg-autoroute').checked=!!s.autoRoute;el('os-cfg-region').value=s.region||'';el('os-cfg-exregions').value=s.excludeRegions||'';el('os-cfg-indomains').value=s.includeDomains||'';el('os-cfg-exdomains').value=s.excludeDomains||'';el('os-cfg-incidrs').value=s.includeCIDRs||'';el('os-cfg-excidrs').value=s.excludeCIDRs||'';var a=s.account||{};el('os-account-name').textContent=a.email||a.nick||'-';el('os-account-expiry').textContent=a.expire_at?String(a.expire_at)+' ('+String(a.remaining_days)+' days)':'-';el('os-credentials').textContent=s.credentialsSaved?T.yes:T.no}
+ function status(){api('status').then(setStatus).catch(function(e){msg(e.message,true);el('os-state').textContent=T.failed})}
+ function rate(bytesPerSecond){var n=(Number(bytesPerSecond)||0)*8,u=['bps','Kbps','Mbps','Gbps'],i=0;while(n>=1000&&i<u.length-1){n/=1000;i++}return (n>0&&n<10?n.toFixed(1):Math.round(n))+' '+u[i]}
+ function bytes(n){n=Number(n)||0;var u=['B','KiB','MiB','GiB','TiB'],i=0;while(n>=1024&&i<u.length-1){n/=1024;i++}return (n>0&&n<10?n.toFixed(1):Math.round(n))+' '+u[i]}
+ function traffic(){api('traffic').then(function(t){var live='↑ '+rate(t.up_bps)+' / ↓ '+rate(t.down_bps);el('os-traffic').textContent=live;el('os-traffic-overview').textContent=live;el('os-traffic-total').textContent='↑ '+bytes(t.up_bytes)+' / ↓ '+bytes(t.down_bytes)+' / Σ '+bytes(t.total_bytes);var body=el('os-services-body'),items=[];Object.keys(t.services||{}).forEach(function(name){items.push({name:name,v:t.services[name]})});items.sort(function(a,b){return (b.v.total_bytes||0)-(a.v.total_bytes||0)});body.innerHTML='';items.forEach(function(x,i){var row=body.insertRow(-1);td(row,i+1);td(row,x.name.replace(/_/g,' / '));td(row,bytes(x.v.up_bytes));td(row,bytes(x.v.down_bytes));td(row,bytes(x.v.total_bytes))});if(!items.length)body.innerHTML='<tr><td colspan="5" class="os-empty">-</td></tr>'}).catch(function(){el('os-traffic').textContent='↑ 0 bps / ↓ 0 bps';el('os-traffic-overview').textContent='↑ 0 bps / ↓ 0 bps'})}
+ function td(row,text){var c=row.insertCell(-1);c.textContent=text==null||text===''?'-':text;return c}
+ function lines(ping){var body=el('os-lines-body');body.innerHTML='<tr><td colspan="6" class="os-empty">'+T.loading+'</td></tr>';el('os-ping-progress').textContent=ping?T.loading:'';api('lines'+(ping?'?sort=ping':'')).then(function(r){body.innerHTML='';el('os-ping-progress').textContent='';if(!r.lines.length){body.innerHTML='<tr><td colspan="6" class="os-empty">-</td></tr>';return}r.lines.forEach(function(l){var row=body.insertRow(-1);td(row,l.id);td(row,l.name);td(row,l.location);td(row,l.isFree?T.free:T.vip);td(row,ping?(l.reachable?(Math.round(l.latency_ms*10)/10)+' ms':'Timeout'):'-');var c=td(row,'');var b=document.createElement('button');b.className='cbi-button cbi-button-apply';b.textContent=T.connect;b.onclick=function(){msg('Connecting / Switching: '+l.name);b.disabled=true;b.textContent=T.loading;api('connect',{method:'POST',body:{line_id:l.id}}).then(function(x){msg(T.connected+': '+x.lineName);status();history();lines(false)}).catch(function(e){msg(e.message,true);b.disabled=false;b.textContent=T.connect})};c.appendChild(b)})}).catch(function(e){body.innerHTML='';td(body.insertRow(-1),e.message).colSpan=6;el('os-ping-progress').textContent='';msg(e.message,true)})}
+ function history(){var body=el('os-history-body');api('history').then(function(r){body.innerHTML='';if(!r.history.length){body.innerHTML='<tr><td colspan="5" class="os-empty">-</td></tr>';return}r.history.forEach(function(h){var row=body.insertRow(-1);td(row,h.connected_at?new Date(h.connected_at).toLocaleString():'-');td(row,h.line_name||('#'+h.line_id));td(row,h.location);td(row,h.server?(h.server+':'+h.port):'-');var c=td(row,'');var b=document.createElement('button');b.className='cbi-button cbi-button-apply';b.textContent=T.reconnect;b.onclick=function(){api('reconnect',{method:'POST',body:{id:h.id}}).then(function(x){msg(T.connected+': '+x.lineName);status();history()}).catch(function(e){msg(e.message,true)})};c.appendChild(b)})}).catch(function(e){msg(e.message,true)})}
+ var speedLoaded=false;function speedServers(){var s=el('os-speed-server');s.innerHTML='<option value="">'+T.loading+'</option>';el('os-speed-state').textContent=T.loading;api('speed_servers').then(function(r){s.innerHTML='';r.servers.forEach(function(x){var o=document.createElement('option');o.value=x.id;o.textContent=x.name+' — '+x.sponsor+' (#'+x.id+')';s.appendChild(o)});speedLoaded=true;el('os-speed-state').textContent=r.servers.length+' servers'}).catch(function(e){s.innerHTML='<option value="">'+T.failed+'</option>';el('os-speed-state').textContent=e.message})}
+ el('os-speed-refresh').onclick=speedServers;
+ el('os-speed-run').onclick=function(){var id=el('os-speed-server').value;if(!id)return;el('os-speed-state').textContent=T.loading;el('os-speed-run').disabled=true;api('speed_run',{method:'POST',body:{id:id}}).then(function(r){el('os-speed-ping').textContent=r.ping_ms.toFixed(1)+' ms';el('os-speed-down').textContent=r.download_mbps.toFixed(1)+' Mbps';el('os-speed-up').textContent=r.upload_mbps.toFixed(1)+' Mbps';el('os-speed-state').textContent=(r.fallback?'Fallback → ':'')+r.server.name+' / '+r.server.sponsor}).catch(function(e){el('os-speed-state').textContent=e.message}).then(function(){el('os-speed-run').disabled=false})};
+ function speedCNServers(){var s=el('os-speedcn-server');s.innerHTML='<option value="">'+T.loading+'</option>';el('os-speedcn-state').textContent=T.loading;api('speedcn_servers').then(function(r){s.innerHTML='';r.servers.forEach(function(x){var o=document.createElement('option');o.value=x.id;o.textContent=[x.province,x.city,x.operator,'#'+x.id].filter(Boolean).join(' / ');s.appendChild(o)});el('os-speedcn-state').textContent=r.servers.length+' servers'}).catch(function(e){s.innerHTML='<option value="">'+T.failed+'</option>';el('os-speedcn-state').textContent=e.message})}
+ el('os-speedcn-refresh').onclick=speedCNServers;
+ el('os-speedcn-run').onclick=function(){var id=el('os-speedcn-server').value;if(!id)return;var b=el('os-speedcn-run');b.disabled=true;el('os-speedcn-state').textContent=T.loading;api('speedcn_run',{method:'POST',body:{id:id}}).then(function(r){el('os-speedcn-ping').textContent=r.ping_ms.toFixed(1)+' ms';el('os-speedcn-down').textContent=r.download_mbps.toFixed(1)+' Mbps';el('os-speedcn-up').textContent=r.upload_mbps.toFixed(1)+' Mbps';el('os-speedcn-state').textContent=[r.server.province,r.server.city,r.server.operator].filter(Boolean).join(' / ')}).catch(function(e){el('os-speedcn-state').textContent=e.message}).then(function(){b.disabled=false})};
+ document.querySelectorAll('.os-tab').forEach(function(b){b.onclick=function(){document.querySelectorAll('.os-tab,.os-pane').forEach(function(n){n.classList.remove('active')});b.classList.add('active');var tab=b.getAttribute('data-tab');el('os-pane-'+tab).classList.add('active');if(tab==='test'&&!speedLoaded){speedServers();speedCNServers()}}});
+ el('os-connect').onclick=function(){var b=el('os-connect');msg('Connecting to saved server…');b.disabled=true;b.textContent=T.loading;api('connect',{method:'POST',body:{line_id:-1}}).then(function(x){msg(T.connected+': '+x.lineName);status();history()}).catch(function(e){msg(e.message,true)}).then(function(){b.disabled=false;b.textContent=T.connect})};el('os-disconnect').onclick=function(){var b=el('os-disconnect');msg('Disconnecting…');b.disabled=true;api('disconnect',{method:'POST',body:{}}).then(function(){status();msg(T.disconnected)}).catch(function(e){msg(e.message,true)}).then(function(){b.disabled=false})};
+ function setup(mode){msg(T.loading);api('setup',{method:'POST',body:{mode:mode}}).then(function(x){msg(x.message+' ('+x.lan_device+', '+x.mode+')');status();history()}).catch(function(e){msg(e.message,true)})}el('os-setup-smart').onclick=function(){setup('smart')};el('os-setup-global').onclick=function(){setup('global')};
+ el('os-refresh-lines').onclick=function(){lines(false)};el('os-sort-ping').onclick=function(){lines(true)};el('os-refresh-history').onclick=history;
+ el('os-login').onclick=function(){api('login',{method:'POST',body:{username:el('os-username').value,password:el('os-password').value}}).then(function(){el('os-password').value='';msg(T.connected);status();lines(false)}).catch(function(e){msg(e.message,true)})};el('os-logout').onclick=function(){api('logout',{method:'POST',body:{}}).then(function(){status();msg(T.disconnected)}).catch(function(e){msg(e.message,true)})};
+ el('os-save').onclick=function(){api('settings',{method:'POST',body:{mode:el('os-cfg-mode').value,tun:false,free_only:el('os-cfg-free').checked,auto_connect:el('os-cfg-auto').checked,auto_route:el('os-cfg-autoroute').checked,region:el('os-cfg-region').value,exclude_regions:el('os-cfg-exregions').value,include_domains:el('os-cfg-indomains').value,exclude_domains:el('os-cfg-exdomains').value,include_cidrs:el('os-cfg-incidrs').value,exclude_cidrs:el('os-cfg-excidrs').value}}).then(function(){msg('<%:Settings saved%>');status();lines(false)}).catch(function(e){msg(e.message,true)})};
+ el('os-region-test').onclick=function(){var out=el('os-region-result'),b=el('os-region-test');out.textContent=T.loading;b.disabled=true;api('regiontest').then(function(d){var place=[d.country,d.province,d.city].filter(Boolean).join(' / '),health=T[d.health]||T.unknown,parts=[T.region+': '+place,T.operator+': '+(d.isp||'-'),T.ip+': '+(d.address||'-'),T.health+': '+health+(d.health!=='unknown'?' '+d.health_score+'/100 ('+T.risk+' '+d.risk_score+', '+T.proxy+' '+(d.proxy||'-')+')':''),T.asn+': '+(d.asn||'-'),T.provider+': '+([d.provider,d.organization,d.ip_type].filter(Boolean).join(' / ')||'-')];out.textContent=parts.join(' | ')}).catch(function(e){out.textContent=e.message;msg(e.message,true)}).then(function(){b.disabled=false})};
+ status();traffic();lines(false);history();setInterval(status,5000);setInterval(traffic,1000);
+})();
+//]]>
+</script>
+<%+footer%>

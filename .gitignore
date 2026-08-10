@@ -1,0 +1,28 @@
+# OpenWrt and Go build outputs
+bin/
+build_dir/
+staging_dir/
+dl/
+tmp/
+logs/
+target/
+*.ipk
+*.apk
+*.bin
+*.gz
+openwrt/opensocks/src/opensocks
+
+# Runtime configuration and credentials
+etc/opensocks/
+credentials.json
+traffic.json
+history.json
+*.log
+*.pcap
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
