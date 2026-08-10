@@ -110,8 +110,18 @@ fi
 "$po2lmo" "$ROOT/openwrt/luci-app-opensocks/po/zh_Hans/opensocks.po" "$luci_data/usr/lib/lua/luci/i18n/opensocks.zh-cn.lmo"
 build_ipk luci-app-opensocks all "$luci_control" "$luci_data"
 
+# Build an opkg feed index beside the release packages.
+: > "$OUT/Packages"
+for ipk in "$OUT"/*.ipk; do
+	name="$(basename "$ipk")"
+	tar -xOzf "$ipk" control.tar.gz | tar -xzO ./control >> "$OUT/Packages"
+	printf 'Filename: %s\nSize: %s\nSHA256sum: %s\n\n' "$name" "$(wc -c < "$ipk" | tr -d ' ')" \
+		"$(shasum -a 256 "$ipk" | awk '{print $1}')" >> "$OUT/Packages"
+done
+gzip -9c "$OUT/Packages" > "$OUT/Packages.gz"
+
 ( cd "$ROOT/mobile" && flutter build apk --release && flutter build ios --release --no-codesign )
 cp "$ROOT/mobile/build/app/outputs/flutter-apk/app-release.apk" "$OUT/OpenSocks-${VERSION}-android.apk"
 ( cd "$ROOT/mobile/build/ios/iphoneos" && zip -qry "$OUT/OpenSocks-${VERSION}-ios-unsigned.zip" Runner.app )
-( cd "$OUT" && shasum -a 256 ./* > SHA256SUMS )
+( cd "$OUT" && find . -maxdepth 1 -type f ! -name SHA256SUMS -print | sort | xargs shasum -a 256 > SHA256SUMS )
 printf 'Release artifacts written to %s\n' "$OUT"

@@ -22,7 +22,14 @@ import (
 
 const chinaRoutesURL = "https://raw.githubusercontent.com/17mon/china_ip_list/master/china_ip_list.txt"
 
+// Startup recovery, explicit connect and the routing watchdog may converge at
+// the same time. Serialize complete table replacement so nft never appends a
+// second copy of the rules to a table another goroutine just created.
+var redirectMu sync.Mutex
+
 func setupRedirect(mode, proxyServer string) error {
+	redirectMu.Lock()
+	defer redirectMu.Unlock()
 	cfg := readSettings()
 	serverIP := resolveIPv4(proxyServer)
 	var cidrs []string
@@ -113,7 +120,7 @@ func setupRedirect(mode, proxyServer string) error {
 	}
 	script.WriteString("}\n")
 
-	teardownRedirect()
+	teardownRedirectLocked()
 	if err := setupTPROXYRoute(); err != nil {
 		return err
 	}
@@ -367,6 +374,12 @@ func detectLANDevice() string {
 }
 
 func teardownRedirect() {
+	redirectMu.Lock()
+	defer redirectMu.Unlock()
+	teardownRedirectLocked()
+}
+
+func teardownRedirectLocked() {
 	exec.Command("nft", "delete", "table", "inet", "opensocks").Run()
 	teardownTPROXYRoute()
 }
