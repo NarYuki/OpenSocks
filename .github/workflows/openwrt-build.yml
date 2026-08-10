@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: openwrt/opensocks/src/go.mod
           cache: false
@@ -68,7 +68,7 @@ jobs:
           test -s "$RELEASE_DIR/d24a5e234001294c"
           test "$(find "$RELEASE_DIR" -maxdepth 1 -name '*.ipk' | wc -l)" -eq 3
           gzip -t "$RELEASE_DIR/Packages.gz"
-          shasum -a 256 -c "$RELEASE_DIR/SHA256SUMS"
+          (cd "$RELEASE_DIR" && shasum -a 256 -c SHA256SUMS)
           "${RUNNER_TEMP}/usign/build/usign" -V -m "$RELEASE_DIR/Packages" -p "$GITHUB_WORKSPACE/keys/d24a5e234001294c" -x "$RELEASE_DIR/Packages.sig"
           "${RUNNER_TEMP}/usign/build/usign" -V -m "$RELEASE_DIR/SHA256SUMS" -p "$GITHUB_WORKSPACE/keys/d24a5e234001294c" -x "$RELEASE_DIR/SHA256SUMS.sig"
 
