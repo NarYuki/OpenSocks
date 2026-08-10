@@ -2,7 +2,7 @@
 
 [中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-OpenSocks is a low-memory OpenWrt client, LuCI dashboard, and mobile controller for China-route proxy connections. It uses `shadowsocks-libev` and nftables instead of a large all-in-one proxy core.
+OpenSocks is an open-source OpenWrt client for the Transocks China return-route service, with a LuCI dashboard and mobile controller. A Transocks account is required to use its server lines. It uses `shadowsocks-libev` and nftables instead of a large all-in-one proxy core. This is an independent implementation, not an official Transocks client.
 
 ## Highlights
 

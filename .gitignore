@@ -6,6 +6,17 @@ dl/
 tmp/
 logs/
 target/
+build/
+output/
+outputs/
+dist/
+release/
+DerivedData/
+*.xcarchive
+*.dSYM
+*.ipa
+*.aab
+*.zip
 *.ipk
 *.apk
 *.bin
