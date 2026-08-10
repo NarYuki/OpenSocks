@@ -16,8 +16,8 @@ build_ipk() {
 	control_dir="$3"
 	data_dir="$4"
 	package="$OUT/${name}_${VERSION}-1_${arch}.ipk"
-	( cd "$control_dir" && tar --uid 0 --gid 0 -czf "$WORK/control.tar.gz" . )
-	( cd "$data_dir" && tar --uid 0 --gid 0 -czf "$WORK/data.tar.gz" . )
+	( cd "$control_dir" && tar --owner=0 --group=0 -czf "$WORK/control.tar.gz" . )
+	( cd "$data_dir" && tar --owner=0 --group=0 -czf "$WORK/data.tar.gz" . )
 	printf '2.0\n' > "$WORK/debian-binary"
 	# OpenWrt 22.03 opkg uses the legacy gzip-compressed tar IPK container.
 	( cd "$WORK" && tar -czf "$package" debian-binary control.tar.gz data.tar.gz )
