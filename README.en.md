@@ -6,7 +6,8 @@ OpenSocks is a low-memory OpenWrt client, LuCI dashboard, and mobile controller 
 
 ## Highlights
 
-- Smart China routing and full China-line routing
+- Smart routing sends Chinese services through the Transocks China line while X, YouTube, Google, and other non-Chinese services use the original WAN
+- Full China routing sends all public TCP/UDP from LAN and Wi-Fi through the Transocks China line
 - TCP REDIRECT and UDP TPROXY, including Honor of Kings PVP traffic
 - Persistent server selection, session recovery, and automatic route restoration
 - AES-256-GCM encrypted credential storage
