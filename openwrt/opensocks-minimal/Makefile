@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=opensocks-minimal
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-3.0-or-later
 
 include $(INCLUDE_DIR)/package.mk
@@ -13,7 +13,6 @@ define Package/opensocks-minimal
   SUBMENU:=Proxy
   TITLE:=Download-on-boot minimal OpenSocks launcher
   DEPENDS:=+shadowsocks-libev-ss-redir +shadowsocks-libev-ss-local +nftables-json +kmod-nft-tproxy +ca-bundle +uci +wget-ssl
-  CONFLICTS:=opensocks
 endef
 
 define Package/opensocks-minimal/install

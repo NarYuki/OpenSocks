@@ -3,7 +3,7 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-0.2.0}"
-RELEASE="${RELEASE:-2}"
+RELEASE="${RELEASE:-3}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
@@ -32,7 +32,6 @@ cat > "$daemon_control/control" <<EOF
 Package: opensocks
 Version: ${VERSION}-${RELEASE}
 Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci
-Conflicts: opensocks-minimal
 Source: opensocks
 Section: net
 Architecture: mipsel_24kc
@@ -71,7 +70,6 @@ cat > "$minimal_control/control" <<EOF
 Package: opensocks-minimal
 Version: ${VERSION}-${RELEASE}
 Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci, wget-ssl
-Conflicts: opensocks
 Source: opensocks-minimal
 Section: net
 Architecture: all

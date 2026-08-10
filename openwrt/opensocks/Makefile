@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=opensocks
 PKG_VERSION:=0.2.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=OpenSocks Developers
 PKG_LICENSE:=GPL-3.0-or-later
@@ -24,7 +24,6 @@ define Package/opensocks
   SUBMENU:=Proxy
   TITLE:=Low-memory Transocks proxy daemon for OpenWrt
   DEPENDS:=+shadowsocks-libev-ss-redir +shadowsocks-libev-ss-local +nftables-json +kmod-nft-tproxy +ca-bundle +uci
-  CONFLICTS:=opensocks-minimal
 endef
 
 define Package/opensocks/description
