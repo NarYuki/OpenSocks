@@ -1,10 +1,12 @@
-# OpenSocks for OpenWrt
-
 <p align="center">
   <img src="assets/opensocks-icon-monochrome.png" alt="OpenSocks" width="192">
 </p>
 
-[中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+<h1 align="center">OpenSocks for OpenWrt</h1>
+
+<p align="center">
+  <a href="README.md">中文</a> | <a href="README.en.md">English</a> | <a href="README.ja.md">日本語</a>
+</p>
 
 OpenSocks is an open-source OpenWrt client for the Transocks China return-route service, with a LuCI dashboard and mobile controller. A Transocks account is required to use its server lines. It uses `shadowsocks-libev` and nftables instead of a large all-in-one proxy core. This is an independent implementation, not an official Transocks client.
 

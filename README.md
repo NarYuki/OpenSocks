@@ -1,10 +1,12 @@
-# OpenSocks for OpenWrt
-
 <p align="center">
   <img src="assets/opensocks-icon-monochrome.png" alt="OpenSocks" width="192">
 </p>
 
-[中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
+<h1 align="center">OpenSocks for OpenWrt</h1>
+
+<p align="center">
+  <a href="README.md">中文</a> | <a href="README.en.md">English</a> | <a href="README.ja.md">日本語</a>
+</p>
 
 OpenSocks 是用于在 OpenWrt 上使用 Transocks（穿梭）中国回国线路服务的开源客户端，可通过 LuCI 管理界面或手机应用操作。使用服务器线路需要 Transocks 账户。数据平面使用 `shadowsocks-libev` 与 nftables，不需要大型一体化代理核心，适合存储和内存有限的路由器。本项目是独立实现，并非 Transocks 官方客户端。
 
