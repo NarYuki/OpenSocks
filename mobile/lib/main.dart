@@ -911,7 +911,9 @@ class _LinesPageState extends State<LinesPage> {
                           : latency < 100
                           ? Theme.of(c).colorScheme.primary
                           : latency < 220
-                          ? Theme.of(c).colorScheme.tertiary
+                          ? (Theme.of(c).brightness == Brightness.dark
+                                ? const Color(0xffffc107)
+                                : const Color(0xffa85d00))
                           : Theme.of(c).colorScheme.error;
                       return Card(
                         color: selected
