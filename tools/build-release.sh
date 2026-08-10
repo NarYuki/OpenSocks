@@ -3,6 +3,7 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-0.2.0}"
+RELEASE="${RELEASE:-2}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
@@ -15,7 +16,7 @@ build_ipk() {
 	arch="$2"
 	control_dir="$3"
 	data_dir="$4"
-	package="$OUT/${name}_${VERSION}-1_${arch}.ipk"
+	package="$OUT/${name}_${VERSION}-${RELEASE}_${arch}.ipk"
 	( cd "$control_dir" && tar --owner=0 --group=0 -czf "$WORK/control.tar.gz" . )
 	( cd "$data_dir" && tar --owner=0 --group=0 -czf "$WORK/data.tar.gz" . )
 	printf '2.0\n' > "$WORK/debian-binary"
@@ -29,7 +30,7 @@ daemon_data="$WORK/daemon-data"
 mkdir -p "$daemon_control" "$daemon_data/etc/init.d" "$daemon_data/etc/config" "$daemon_data/etc/opensocks" "$daemon_data/usr/lib/opensocks"
 cat > "$daemon_control/control" <<EOF
 Package: opensocks
-Version: ${VERSION}-1
+Version: ${VERSION}-${RELEASE}
 Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci
 Conflicts: opensocks-minimal
 Source: opensocks
@@ -68,7 +69,7 @@ binary_sha="$(shasum -a 256 "$OUT/opensocks-linux-mipsle.gz" | awk '{print $1}')
 binary_url="${BINARY_URL:-https://rel.n4t.su/opkg/by-sha/$binary_sha/opensocks-linux-mipsle.gz}"
 cat > "$minimal_control/control" <<EOF
 Package: opensocks-minimal
-Version: ${VERSION}-1
+Version: ${VERSION}-${RELEASE}
 Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci, wget-ssl
 Conflicts: opensocks
 Source: opensocks-minimal
@@ -99,7 +100,7 @@ mkdir -p "$luci_control" "$luci_data/usr/lib/lua/luci/controller" "$luci_data/us
 	"$luci_data/usr/lib/lua/luci/i18n" "$luci_data/usr/share/rpcd/acl.d"
 cat > "$luci_control/control" <<EOF
 Package: luci-app-opensocks
-Version: ${VERSION}-1
+Version: ${VERSION}-${RELEASE}
 Depends: libc, opensocks | opensocks-minimal, luci-base, luci-compat, curl
 Source: luci-app-opensocks
 Section: luci

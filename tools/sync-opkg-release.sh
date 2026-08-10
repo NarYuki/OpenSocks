@@ -18,6 +18,7 @@ case "$tag" in
 	*) printf 'Invalid release tag: %s\n' "$tag" >&2; exit 1 ;;
 esac
 version="${tag#v}"
+release="${PACKAGE_RELEASE:-2}"
 
 command -v curl >/dev/null
 command -v jq >/dev/null
@@ -27,7 +28,7 @@ stage="$(mktemp -d "$publish_root/.opkg-${tag}.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT INT TERM
 base="https://github.com/$repository/releases/download/$tag"
 cache_bust="$(date -u +%s)"
-assets="Packages Packages.gz Packages.sig SHA256SUMS SHA256SUMS.sig d24a5e234001294c luci-app-opensocks_${version}-1_all.ipk opensocks-linux-mipsle.gz opensocks-minimal_${version}-1_all.ipk opensocks_${version}-1_mipsel_24kc.ipk"
+assets="Packages Packages.gz Packages.sig SHA256SUMS SHA256SUMS.sig d24a5e234001294c luci-app-opensocks_${version}-${release}_all.ipk opensocks-linux-mipsle.gz opensocks-minimal_${version}-${release}_all.ipk opensocks_${version}-${release}_mipsel_24kc.ipk"
 
 for asset in $assets; do
 	curl -fL --retry 3 --connect-timeout 15 -o "$stage/$asset" "$base/$asset?cache=$cache_bust"
