@@ -139,8 +139,8 @@ msgstr "手机应用"
 msgid "Mobile app pairing"
 msgstr "手机应用配对"
 
-msgid "The mobile API uses a separate port and a 256-bit authentication token. For access outside your home, connect to the router through an encrypted VPN first."
-msgstr "手机 API 使用独立端口和 256 位认证令牌。外网访问时，请先通过加密 VPN 连接到路由器。"
+msgid "For access outside your home, connect to the router through Tailscale or a similar VPN first."
+msgstr "从外网使用时，请先通过 Tailscale 等方式连接到路由器。"
 
 msgid "Router URL"
 msgstr "路由器 URL"

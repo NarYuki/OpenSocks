@@ -43,7 +43,7 @@
 
  <section id="os-pane-mobile" class="os-pane">
   <h3><%:Mobile app pairing%></h3>
-  <div class="os-note"><%:The mobile API uses a separate port and a 256-bit authentication token. For access outside your home, connect to the router through an encrypted VPN first.%></div>
+  <div class="os-note"><%:For access outside your home, connect to the router through Tailscale or a similar VPN first.%></div>
   <div class="os-form">
    <span><%:Router URL%></span><input type="text" id="os-mobile-url" readonly value="-">
    <span><%:Pairing token%></span><input type="password" id="os-mobile-token" readonly value="-">
@@ -91,7 +91,7 @@
  <section id="os-pane-settings" class="os-pane">
   <div class="os-form">
    <label for="os-cfg-mode"><%:Routing mode%></label><select id="os-cfg-mode"><option value="smart"><%:Smart — only China destinations%></option><option value="global"><%:Full China routing%></option></select>
-   <span><%:Lightweight engine%></span><span>ss-redir + nftables (TCP)</span>
+   <span><%:Lightweight engine%></span><span>ss-redir + nftables (TCP/UDP)</span>
    <label for="os-cfg-free"><%:Show free servers only%></label><span><input type="checkbox" id="os-cfg-free"> <small id="os-free-note"></small></span>
    <label for="os-cfg-auto"><%:Connect automatically at boot%></label><input type="checkbox" id="os-cfg-auto">
    <label for="os-cfg-autoroute"><%:Restore routing automatically%></label><input type="checkbox" id="os-cfg-autoroute">

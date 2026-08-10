@@ -141,8 +141,8 @@ msgstr "スマホアプリ"
 msgid "Mobile app pairing"
 msgstr "スマホアプリ連携"
 
-msgid "The mobile API uses a separate port and a 256-bit authentication token. For access outside your home, connect to the router through an encrypted VPN first."
-msgstr "スマホAPIは専用ポートと256bit認証トークンで保護されています。外出先から利用する場合は、先に暗号化VPNでルーターへ接続してください。"
+msgid "For access outside your home, connect to the router through Tailscale or a similar VPN first."
+msgstr "外出先から利用する場合は、先にTailscaleなどでルーターへ接続してください。"
 
 msgid "Router URL"
 msgstr "ルーターURL"

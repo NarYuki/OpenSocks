@@ -80,7 +80,13 @@ id=-1)。無料回線はアカウント不要で、端末登録 API (`/api/1/app
 
 RAM 120MBの実機ではmihomoがルーター全体を不安定化したためです。現在はAPIが返すSS接続に必要な
 `ss-redir`だけを使い、中国CIDRリストをnftablesのinterval setへ読み込みます。実機RSSは
-OpenSocks約11.6MB + ss-redir約1.4MBでした。軽量版はTCP専用で、Trojan/GTS/TUN/UDPには未対応です。
+OpenSocks約11.6MB + ss-redir約1.4MBでした。TCPはREDIRECT、UDPはTPROXYで中国経路へ送り、
+王者荣耀のPVP通信も含めて処理します。Trojan/GTS/TUNには未対応です。
+
+容量が限られる機種向けには`opensocks-minimal`も用意しています。このIPKはランチャーだけを
+overlayへ保存し、署名済みリリースの`opensocks-linux-mipsle.gz`をSHA-256検証して`/tmp`へ展開します。
+実行ファイルは再起動時に再取得しますが、UCI設定は`/etc/config/opensocks`、暗号化済み認証情報・
+履歴・通信統計は`/etc/opensocks`に残るため失われません。
 
 ### ルーターを再起動すると?
 

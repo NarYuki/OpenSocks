@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,6 +28,32 @@ func TestCredentialStoreUsesRootOnlyPermissions(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0600 {
 		t.Fatalf("permissions = %o, want 600", info.Mode().Perm())
+	}
+	raw, err := os.ReadFile(credentialsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("secret")) || bytes.Contains(raw, []byte("user@example.com")) {
+		t.Fatalf("credential file contains plaintext: %s", raw)
+	}
+	keyInfo, err := os.Stat(credentialKeyFile())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if keyInfo.Mode().Perm() != 0600 {
+		t.Fatalf("key permissions = %o, want 600", keyInfo.Mode().Perm())
+	}
+}
+
+func TestCredentialStoreRejectsPlaintext(t *testing.T) {
+	original := credentialsFile
+	credentialsFile = filepath.Join(t.TempDir(), "credentials.enc")
+	t.Cleanup(func() { credentialsFile = original })
+	if err := os.WriteFile(credentialsFile, []byte(`{"email":"user@example.com","password":"secret"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadCredentials(); err == nil {
+		t.Fatal("plaintext credential store was accepted")
 	}
 }
 
@@ -77,5 +104,18 @@ func TestActiveVIP(t *testing.T) {
 	}
 	if activeVIP(nil) {
 		t.Fatal("nil account was recognized as active")
+	}
+}
+
+func TestHonorOfKingsDomainsIncludeSubdomains(t *testing.T) {
+	for _, name := range []string{
+		"pvp.qq.com",
+		"update.pvp.qq.com",
+		"cdn.game.gtimg.cn",
+		"receiver.msdk.qq.com",
+	} {
+		if got := serviceForDNSNames([]string{name}); got != "honor_of_kings" {
+			t.Fatalf("serviceForDNSNames(%q) = %q, want honor_of_kings", name, got)
+		}
 	}
 }

@@ -73,6 +73,23 @@ func setupRedirect(mode, proxyServer string) error {
 		script.WriteString(fmt.Sprintf("  ip daddr @cn4 meta l4proto tcp counter redirect to :%d\n", mixedPort))
 	}
 	script.WriteString(" }\n")
+	// ss-redir receives UDP through TPROXY. 王者荣耀 uses UDP for PVP, so
+	// redirecting TCP alone leaves the actual match outside the China route.
+	script.WriteString(" chain prerouting_udp { type filter hook prerouting priority mangle; policy accept;\n")
+	script.WriteString("  iifname != \"" + detectLANDevice() + "\" return\n")
+	script.WriteString("  ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 } return\n")
+	if serverIP != "" {
+		script.WriteString("  ip daddr " + serverIP + " return\n")
+	}
+	if mode == "global" {
+		script.WriteString(fmt.Sprintf("  meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
+	} else {
+		script.WriteString("  ip daddr @exclude4 return\n")
+		script.WriteString(fmt.Sprintf("  ip daddr @domain4 meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
+		script.WriteString(fmt.Sprintf("  ip daddr @include4 meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
+		script.WriteString(fmt.Sprintf("  ip daddr @cn4 meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
+	}
+	script.WriteString(" }\n")
 	if mode != "global" {
 		script.WriteString(" chain force_china_tcp { type filter hook forward priority filter - 1; policy accept;\n")
 		script.WriteString("  iifname \"" + detectLANDevice() + "\" ip daddr @domain4 udp dport 443 counter reject\n")
@@ -94,19 +111,16 @@ func setupRedirect(mode, proxyServer string) error {
 		script.WriteString(" chain traffic_out { type filter hook output priority filter - 2; policy accept; ip daddr " + serverIP + " counter name proxy_up; }\n")
 		script.WriteString(" chain traffic_in { type filter hook input priority filter - 2; policy accept; ip saddr " + serverIP + " counter name proxy_down; }\n")
 	}
-	if mode == "global" {
-		// Browsers otherwise prefer QUIC/HTTP3 over UDP and bypass the TCP
-		// redirection. Rejecting QUIC makes them immediately retry over TCP.
-		script.WriteString(" chain force_tcp { type filter hook forward priority filter - 1; policy accept;\n")
-		script.WriteString("  iifname \"" + detectLANDevice() + "\" udp dport 443 counter reject\n")
-		script.WriteString(" }\n")
-	}
 	script.WriteString("}\n")
 
 	teardownRedirect()
+	if err := setupTPROXYRoute(); err != nil {
+		return err
+	}
 	cmd := exec.Command("nft", "-f", "-")
 	cmd.Stdin = strings.NewReader(script.String())
 	if out, err := cmd.CombinedOutput(); err != nil {
+		teardownTPROXYRoute()
 		return fmt.Errorf("nftables setup failed: %w (%s)", err, truncate(string(out), 500))
 	}
 	return nil
@@ -120,6 +134,7 @@ type serviceGroup struct {
 }
 
 var chinaServiceGroups = []serviceGroup{
+	{"honor_of_kings", []string{"pvp.qq.com", "game.gtimg.cn", "dlied5.qq.com", "ossweb-img.qq.com", "sqimg.qq.com", "msdk.qq.com", "gcloud.qq.com", "tpns.tencent.com", "bugly.qq.com"}},
 	{"bilibili", []string{"bilibili.com", "www.bilibili.com", "api.bilibili.com", "app.bilibili.com", "live.bilibili.com", "bilivideo.com", "bilivideo.cn", "hdslb.com", "b23.tv", "biligame.com", "i.w.bilicdn1.com", "a.w.bilicdn1.com", "upos-hz-mirrorakam.akamaized.net", "upos-sz-mirrorcos.bilivideo.com", "upos-sz-mirrorali.bilivideo.com", "upos-sz-mirrorhw.bilivideo.com", "upos-sz-mirror08c.bilivideo.com", "upos-sz-mirroraliov.bilivideo.com"}},
 	{"baidu", []string{"baidu.com", "www.baidu.com", "m.baidu.com", "map.baidu.com", "hao123.com", "bdstatic.com", "bdimg.com", "bcebos.com", "baidubce.com", "baiducontent.com", "baidupcs.com"}},
 	{"qq_wechat", []string{"qq.com", "www.qq.com", "v.qq.com", "wx.qq.com", "gtimg.com", "qpic.cn", "qlogo.cn", "qqmail.com", "foxmail.com", "tencent.com", "myqcloud.com", "qcloud.com", "qcloudimg.com", "weixin.qq.com", "wechat.com", "wechatinc.com", "weixinbridge.com", "wechatpay.com", "tenpay.com"}},
@@ -353,6 +368,24 @@ func detectLANDevice() string {
 
 func teardownRedirect() {
 	exec.Command("nft", "delete", "table", "inet", "opensocks").Run()
+	teardownTPROXYRoute()
+}
+
+func setupTPROXYRoute() error {
+	teardownTPROXYRoute()
+	if out, err := exec.Command("ip", "rule", "add", "pref", "100", "fwmark", "0x51/0xff", "lookup", "100").CombinedOutput(); err != nil {
+		return fmt.Errorf("UDP policy rule setup failed: %w (%s)", err, truncate(string(out), 300))
+	}
+	if out, err := exec.Command("ip", "route", "add", "local", "0.0.0.0/0", "dev", "lo", "table", "100").CombinedOutput(); err != nil {
+		teardownTPROXYRoute()
+		return fmt.Errorf("UDP policy route setup failed: %w (%s)", err, truncate(string(out), 300))
+	}
+	return nil
+}
+
+func teardownTPROXYRoute() {
+	_ = exec.Command("ip", "rule", "del", "pref", "100", "fwmark", "0x51/0xff", "lookup", "100").Run()
+	_ = exec.Command("ip", "route", "flush", "table", "100").Run()
 }
 
 func resolveIPv4(host string) string {

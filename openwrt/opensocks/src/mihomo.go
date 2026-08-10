@@ -274,6 +274,11 @@ var cnDomainSuffixes = []string{
 	// domestic games / launchers / account and payment services
 	"mihoyo.com", "hoyolab.com", "yuanshen.com", "bh3.com", "benghuai.com", "mhyurl.cn",
 	"game.qq.com", "ieg.com", "wegame.com.cn", "dnf.qq.com", "lol.qq.com", "pvp.qq.com",
+	// 王者荣耀: official site, game assets, login/SDK, telemetry and push.
+	// Match-by-suffix includes every subdomain. PVP server IPs are additionally
+	// covered by the China CIDR set, including UDP endpoints without DNS names.
+	"game.gtimg.cn", "dlied5.qq.com", "ossweb-img.qq.com", "sqimg.qq.com",
+	"msdk.qq.com", "gcloud.qq.com", "tpns.tencent.com", "bugly.qq.com",
 	"neteasegames.com", "163yun.com", "xyq.163.com", "mc.163.com", "my.163.com",
 	"wanmei.com", "perfectworld.com.cn", "changyou.com", "cy.com", "shengqugames.com", "sdo.com",
 	"biligame.com", "biligame.net", "4399.com", "7k7k.com", "9game.cn", "uc.cn",
@@ -326,7 +331,7 @@ func (e *engine) start(conn *connectResponse, mode string, tun bool, geoipURL st
 		"server": boot.Server, "server_port": boot.Port,
 		"local_address": "0.0.0.0", "local_port": mixedPort,
 		"password": boot.Password, "method": boot.Method,
-		"timeout": 60, "mode": "tcp_only", "fast_open": false,
+		"timeout": 60, "mode": "tcp_and_udp", "fast_open": false,
 	}, "", "  ")
 	if err != nil {
 		return err
@@ -338,7 +343,7 @@ func (e *engine) start(conn *connectResponse, mode string, tun bool, geoipURL st
 		return err
 	}
 
-	cmd := exec.Command(binary, "-c", engineConf)
+	cmd := exec.Command(binary, "-u", "-c", engineConf)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {

@@ -1,0 +1,117 @@
+#!/bin/sh
+set -eu
+
+ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
+VERSION="${VERSION:-0.2.0}"
+OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+mkdir -p "$OUT"
+rm -f "$OUT"/*
+
+build_ipk() {
+	name="$1"
+	arch="$2"
+	control_dir="$3"
+	data_dir="$4"
+	package="$OUT/${name}_${VERSION}-1_${arch}.ipk"
+	( cd "$control_dir" && tar --uid 0 --gid 0 -czf "$WORK/control.tar.gz" . )
+	( cd "$data_dir" && tar --uid 0 --gid 0 -czf "$WORK/data.tar.gz" . )
+	printf '2.0\n' > "$WORK/debian-binary"
+	# OpenWrt 22.03 opkg uses the legacy gzip-compressed tar IPK container.
+	( cd "$WORK" && tar -czf "$package" debian-binary control.tar.gz data.tar.gz )
+	rm -f "$WORK/control.tar.gz" "$WORK/data.tar.gz" "$WORK/debian-binary"
+}
+
+daemon_control="$WORK/daemon-control"
+daemon_data="$WORK/daemon-data"
+mkdir -p "$daemon_control" "$daemon_data/etc/init.d" "$daemon_data/etc/config" "$daemon_data/etc/opensocks" "$daemon_data/usr/lib/opensocks"
+cat > "$daemon_control/control" <<EOF
+Package: opensocks
+Version: ${VERSION}-1
+Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci
+Source: opensocks
+Section: net
+Architecture: mipsel_24kc
+Maintainer: OpenSocks Developers
+Description: Low-memory China routing daemon with TCP REDIRECT and UDP TPROXY
+EOF
+printf '/etc/config/opensocks\n' > "$daemon_control/conffiles"
+cat > "$daemon_control/postinst" <<'EOF'
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] || /etc/init.d/opensocks enable
+exit 0
+EOF
+cat > "$daemon_control/prerm" <<'EOF'
+#!/bin/sh
+[ -n "$IPKG_INSTROOT" ] || /etc/init.d/opensocks stop
+exit 0
+EOF
+chmod 0755 "$daemon_control/postinst" "$daemon_control/prerm"
+cp "$ROOT/openwrt/opensocks/files/etc/init.d/opensocks" "$daemon_data/etc/init.d/opensocks"
+cp "$ROOT/openwrt/opensocks/files/etc/config/opensocks" "$daemon_data/etc/config/opensocks"
+chmod 0755 "$daemon_data/etc/init.d/opensocks"
+(
+	cd "$ROOT/openwrt/opensocks/src"
+	CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -trimpath -ldflags='-s -w' -o "$WORK/opensocks" .
+)
+gzip -9c "$WORK/opensocks" > "$daemon_data/usr/lib/opensocks/opensocks.gz"
+cp "$daemon_data/usr/lib/opensocks/opensocks.gz" "$OUT/opensocks-linux-mipsle.gz"
+build_ipk opensocks mipsel_24kc "$daemon_control" "$daemon_data"
+
+minimal_control="$WORK/minimal-control"
+minimal_data="$WORK/minimal-data"
+mkdir -p "$minimal_control" "$minimal_data/etc/init.d" "$minimal_data/etc/config" "$minimal_data/etc/opensocks" "$minimal_data/usr/lib/opensocks"
+binary_sha="$(shasum -a 256 "$OUT/opensocks-linux-mipsle.gz" | awk '{print $1}')"
+cat > "$minimal_control/control" <<EOF
+Package: opensocks-minimal
+Version: ${VERSION}-1
+Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci, wget-ssl
+Provides: opensocks
+Conflicts: opensocks
+Source: opensocks-minimal
+Section: net
+Architecture: all
+Maintainer: OpenSocks Developers
+Description: Minimal verified download-on-boot launcher for OpenSocks
+EOF
+printf '/etc/config/opensocks\n' > "$minimal_control/conffiles"
+cp "$ROOT/openwrt/opensocks-minimal/files/etc/init.d/opensocks" "$minimal_data/etc/init.d/opensocks"
+cp "$ROOT/openwrt/opensocks-minimal/files/usr/lib/opensocks/launcher.sh" "$minimal_data/usr/lib/opensocks/launcher.sh"
+sed "s/@BINARY_SHA256@/$binary_sha/" "$ROOT/openwrt/opensocks-minimal/files/etc/config/opensocks" > "$minimal_data/etc/config/opensocks"
+chmod 0755 "$minimal_data/etc/init.d/opensocks" "$minimal_data/usr/lib/opensocks/launcher.sh"
+build_ipk opensocks-minimal all "$minimal_control" "$minimal_data"
+
+luci_control="$WORK/luci-control"
+luci_data="$WORK/luci-data"
+mkdir -p "$luci_control" "$luci_data/usr/lib/lua/luci/controller" "$luci_data/usr/lib/lua/luci/view/opensocks" \
+	"$luci_data/usr/lib/lua/luci/i18n" "$luci_data/usr/share/rpcd/acl.d"
+cat > "$luci_control/control" <<EOF
+Package: luci-app-opensocks
+Version: ${VERSION}-1
+Depends: libc, opensocks, luci-base, luci-compat, curl
+Source: luci-app-opensocks
+Section: luci
+Architecture: all
+Maintainer: OpenSocks Developers
+Description: LuCI interface for OpenSocks
+EOF
+cp "$ROOT/openwrt/luci-app-opensocks/luasrc/controller/opensocks.lua" "$luci_data/usr/lib/lua/luci/controller/opensocks.lua"
+cp "$ROOT/openwrt/luci-app-opensocks/luasrc/view/opensocks/status.htm" "$luci_data/usr/lib/lua/luci/view/opensocks/status.htm"
+cp "$ROOT/openwrt/luci-app-opensocks/root/usr/share/rpcd/acl.d/luci-app-opensocks.json" "$luci_data/usr/share/rpcd/acl.d/"
+po2lmo="${PO2LMO:-}"
+if [ -z "$po2lmo" ]; then
+	git clone -q --depth 1 --branch openwrt-22.03 https://github.com/openwrt/luci.git "$WORK/luci"
+	make -s -C "$WORK/luci/modules/luci-base/src" po2lmo
+	po2lmo="$WORK/luci/modules/luci-base/src/po2lmo"
+fi
+"$po2lmo" "$ROOT/openwrt/luci-app-opensocks/po/ja/opensocks.po" "$luci_data/usr/lib/lua/luci/i18n/opensocks.ja.lmo"
+"$po2lmo" "$ROOT/openwrt/luci-app-opensocks/po/zh_Hans/opensocks.po" "$luci_data/usr/lib/lua/luci/i18n/opensocks.zh-cn.lmo"
+build_ipk luci-app-opensocks all "$luci_control" "$luci_data"
+
+( cd "$ROOT/mobile" && flutter build apk --release && flutter build ios --release --no-codesign )
+cp "$ROOT/mobile/build/app/outputs/flutter-apk/app-release.apk" "$OUT/OpenSocks-${VERSION}-android.apk"
+( cd "$ROOT/mobile/build/ios/iphoneos" && zip -qry "$OUT/OpenSocks-${VERSION}-ios-unsigned.zip" Runner.app )
+( cd "$OUT" && shasum -a 256 ./* > SHA256SUMS )
+printf 'Release artifacts written to %s\n' "$OUT"
