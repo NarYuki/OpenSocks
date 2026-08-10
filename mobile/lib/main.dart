@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 import 'api.dart';
 import 'l10n/app_localizations.dart';
 import 'connection_store.dart';
@@ -17,13 +18,10 @@ void main() => runApp(const OpenSocksApp());
 class OpenSocksApp extends StatelessWidget {
   const OpenSocksApp({super.key});
   @override
-  Widget build(BuildContext context) => AdaptiveApp(
+  Widget build(BuildContext context) => MaterialApp(
     title: 'OpenSocks',
     themeMode: ThemeMode.system,
-    material: (_, _) =>
-        const MaterialAppData(debugShowCheckedModeBanner: false),
-    cupertino: (_, _) =>
-        const CupertinoAppData(debugShowCheckedModeBanner: false),
+    debugShowCheckedModeBanner: false,
     localizationsDelegates: const [
       AppLocalizations.delegate,
       GlobalMaterialLocalizations.delegate,
@@ -31,7 +29,7 @@ class OpenSocksApp extends StatelessWidget {
       GlobalWidgetsLocalizations.delegate,
     ],
     supportedLocales: const [Locale('ja'), Locale('en'), Locale('zh', 'CN')],
-    materialLightTheme: ThemeData(
+    theme: ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xff006c51),
         brightness: Brightness.light,
@@ -62,7 +60,7 @@ class OpenSocksApp extends StatelessWidget {
       dividerColor: const Color(0xffccd9d4),
       useMaterial3: true,
     ),
-    materialDarkTheme: ThemeData(
+    darkTheme: ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xff22d3ee),
         brightness: Brightness.dark,
@@ -98,16 +96,6 @@ class OpenSocksApp extends StatelessWidget {
       dividerColor: const Color(0xff343946),
       useMaterial3: true,
     ),
-    cupertinoDarkTheme: const CupertinoThemeData(
-      brightness: Brightness.dark,
-      primaryColor: Color(0xff22d3ee),
-      scaffoldBackgroundColor: Color(0xff090b10),
-      barBackgroundColor: Color(0xe6151821),
-    ),
-    cupertinoLightTheme: const CupertinoThemeData(
-      brightness: Brightness.light,
-      primaryColor: Color(0xff087f5b),
-    ),
     home: const BootstrapPage(),
   );
 }
@@ -119,11 +107,21 @@ class BootstrapPage extends StatefulWidget {
 }
 
 class _BootstrapPageState extends State<BootstrapPage> {
+  static const _nativeChannel = MethodChannel('moe.n4tsu.opensocks/native');
   bool loading = true;
   String? url, token;
   @override
   void initState() {
     super.initState();
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          await _nativeChannel.invokeMethod<void>('requestLocalNetworkAccess');
+        } on PlatformException {
+          // Pairing still works by URL if the native permission request fails.
+        }
+      });
+    }
     ConnectionStore.load().then((x) {
       if (mounted) {
         setState(() {
@@ -284,88 +282,67 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext c) {
     final overlayVisible = overlayDepth > 0;
-    final adaptiveAppBar = AdaptiveAppBar(
-      title: 'OpenSocks',
-      subtitle: 'CHINA ROUTE CONTROLLER',
-      useNativeToolbar: true,
-      actions: [
-        AdaptiveAppBarAction(
-          onPressed: widget.onForget,
-          iosSymbol: 'iphone.slash',
-          icon: Icons.phonelink_erase,
-        ),
-      ],
-    );
-    final adaptiveBottomBar = AdaptiveBottomNavigationBar(
-      useNativeBottomBar: true,
-      selectedIndex: index,
-      onTap: (v) => setState(() => index = v),
-      selectedItemColor: Theme.of(c).colorScheme.primary,
-      bottomNavigationBar: _androidNavigation(c),
-      items: [
-        AdaptiveNavigationDestination(
-          icon: 'house',
-          selectedIcon: 'house.fill',
-          label: c.l10n.connect,
-        ),
-        AdaptiveNavigationDestination(
-          icon: 'chart.bar',
-          selectedIcon: 'chart.bar.fill',
-          label: c.l10n.traffic,
-        ),
-        AdaptiveNavigationDestination(
-          icon: 'speedometer',
-          selectedIcon: 'speedometer',
-          label: c.l10n.test,
-        ),
-        AdaptiveNavigationDestination(
-          icon: 'person',
-          selectedIcon: 'person.fill',
-          label: c.l10n.account,
-        ),
-      ],
-    );
     final body = IndexedStack(index: index, children: pages);
+    final usesLiquidBar =
+        Theme.of(c).platform == TargetPlatform.iOS &&
+        PlatformInfo.isIOS26OrHigher();
 
-    if (Theme.of(c).platform != TargetPlatform.iOS) {
-      return Scaffold(
-        extendBody: true,
-        appBar: AppBar(
-          title: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('OpenSocks'),
-              Text('CHINA ROUTE CONTROLLER', style: TextStyle(fontSize: 12)),
-            ],
-          ),
-          actions: [
-            IconButton(
-              onPressed: widget.onForget,
-              icon: const Icon(Icons.phonelink_erase),
-            ),
+    return Scaffold(
+      extendBody: true,
+      appBar: AppBar(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('OpenSocks'),
+            Text('CHINA ROUTE CONTROLLER', style: TextStyle(fontSize: 12)),
           ],
         ),
-        body: body,
-        bottomNavigationBar: overlayVisible ? null : _androidNavigation(c),
-      );
-    }
-
-    return AdaptiveScaffold(
-      appBar: adaptiveAppBar,
-      // IOS26Scaffold publishes the status-bar + native toolbar height through
-      // MediaQuery. Consume only the top inset here so page content starts
-      // below the OpenSocks toolbar while still extending behind the floating
-      // Liquid Glass tab bar at the bottom.
-      body: SafeArea(top: true, bottom: false, child: body),
-      // Native iOS platform views otherwise bleed through Flutter modal sheets.
-      tabBarHidden: overlayVisible,
-      // Keep the floating Liquid Glass bar stable. Auto-minimizing while an
-      // IndexedStack changes tabs can leave the native UIKit bar half collapsed.
-      minimizeBehavior: TabBarMinimizeBehavior.never,
-      enableBlur: true,
-      bottomNavigationBar: adaptiveBottomBar,
+        actions: [
+          IconButton(
+            onPressed: widget.onForget,
+            icon: const Icon(Icons.phonelink_erase),
+          ),
+        ],
+      ),
+      body: body,
+      bottomNavigationBar: usesLiquidBar
+          ? _iosLiquidNavigation(c, hidden: overlayVisible)
+          : (overlayVisible ? null : _androidNavigation(c)),
     );
   }
+
+  List<AdaptiveNavigationDestination> _navigationItems(BuildContext c) => [
+    AdaptiveNavigationDestination(
+      icon: 'house',
+      selectedIcon: 'house.fill',
+      label: c.l10n.connect,
+    ),
+    AdaptiveNavigationDestination(
+      icon: 'chart.bar',
+      selectedIcon: 'chart.bar.fill',
+      label: c.l10n.traffic,
+    ),
+    AdaptiveNavigationDestination(
+      icon: 'speedometer',
+      selectedIcon: 'speedometer',
+      label: c.l10n.test,
+    ),
+    AdaptiveNavigationDestination(
+      icon: 'person',
+      selectedIcon: 'person.fill',
+      label: c.l10n.account,
+    ),
+  ];
+
+  Widget _iosLiquidNavigation(BuildContext c, {required bool hidden}) =>
+      IOS26NativeTabBar(
+        destinations: _navigationItems(c),
+        selectedIndex: index,
+        onTap: (v) => setState(() => index = v),
+        tint: Theme.of(c).colorScheme.primary,
+        minimizeBehavior: TabBarMinimizeBehavior.never,
+        hidden: hidden,
+      );
 
   Widget _androidNavigation(BuildContext c) {
     final colors = Theme.of(c).colorScheme;

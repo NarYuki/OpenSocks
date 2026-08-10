@@ -4,6 +4,11 @@
 <dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>OpenSocksルーターを検出して遠隔操作するために使用します。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_opensocks._tcp</string>
+		<string>_http._tcp</string>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key><true/>
