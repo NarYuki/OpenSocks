@@ -64,7 +64,7 @@ minimal_control="$WORK/minimal-control"
 minimal_data="$WORK/minimal-data"
 mkdir -p "$minimal_control" "$minimal_data/etc/init.d" "$minimal_data/etc/config" "$minimal_data/etc/opensocks" "$minimal_data/usr/lib/opensocks"
 binary_sha="$(shasum -a 256 "$OUT/opensocks-linux-mipsle.gz" | awk '{print $1}')"
-binary_url="${BINARY_URL:-https://rel.n4t.su/opkg/opensocks-linux-mipsle.gz}"
+binary_url="${BINARY_URL:-https://rel.n4t.su/opkg/opensocks-linux-mipsle.gz?sha=$binary_sha}"
 cat > "$minimal_control/control" <<EOF
 Package: opensocks-minimal
 Version: ${VERSION}-1

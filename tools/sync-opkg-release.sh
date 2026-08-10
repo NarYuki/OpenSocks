@@ -37,6 +37,8 @@ test "$("$usign_bin" -F -p "$stage/$public_key_fingerprint")" = "$public_key_fin
 "$usign_bin" -V -m "$stage/SHA256SUMS" -p "$stage/$public_key_fingerprint" -x "$stage/SHA256SUMS.sig"
 (cd "$stage" && sha256sum -c SHA256SUMS)
 gzip -t "$stage/Packages.gz"
+chmod 0755 "$stage"
+chmod 0644 "$stage"/*
 
 generation=".opkg-$tag-$(date -u +%Y%m%dT%H%M%SZ)"
 final="$publish_root/$generation"
