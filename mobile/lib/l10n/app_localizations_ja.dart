@@ -75,7 +75,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get modeChanged => 'ルーティングモードを変更しました';
 
   @override
-  String get protected => '保護されています';
+  String get protected => '回国ing';
 
   @override
   String get notConnected => '未接続';

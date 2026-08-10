@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+// adaptive_platform_ui does not re-export this iOS 26 widget yet.
+// ignore: implementation_imports
+import 'package:adaptive_platform_ui/src/widgets/ios26/ios26_native_toolbar.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -288,31 +292,52 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext c) {
     final overlayVisible = overlayDepth > 0;
     final body = IndexedStack(index: index, children: pages);
-    final usesLiquidBar =
-        Theme.of(c).platform == TargetPlatform.iOS &&
-        PlatformInfo.isIOS26OrHigher();
+    final isIOS = Theme.of(c).platform == TargetPlatform.iOS;
+    final usesLiquidBar = isIOS && PlatformInfo.isIOS26OrHigher();
+    final brightness = Theme.of(c).brightness;
 
-    return Scaffold(
-      extendBody: true,
-      appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('OpenSocks'),
-            Text('CHINA ROUTE CONTROLLER', style: TextStyle(fontSize: 12)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            onPressed: widget.onForget,
-            icon: const Icon(Icons.phonelink_erase),
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: brightness == Brightness.dark
+            ? Brightness.light
+            : Brightness.dark,
+        statusBarBrightness: brightness,
       ),
-      body: body,
-      bottomNavigationBar: usesLiquidBar
-          ? _iosLiquidNavigation(c, hidden: overlayVisible)
-          : (overlayVisible ? null : _androidNavigation(c)),
+      child: Scaffold(
+        extendBody: true,
+        appBar: isIOS
+            ? null
+            : AppBar(
+                title: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('OpenSocks'),
+                    Text(
+                      'CHINA ROUTE CONTROLLER',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+                actions: [
+                  IconButton(
+                    onPressed: widget.onForget,
+                    icon: const Icon(Icons.phonelink_erase),
+                  ),
+                ],
+              ),
+        body: isIOS
+            ? Column(
+                children: [
+                  _IOSHomeHeader(onForget: widget.onForget),
+                  Expanded(child: body),
+                ],
+              )
+            : body,
+        bottomNavigationBar: usesLiquidBar
+            ? _iosLiquidNavigation(c, hidden: overlayVisible)
+            : (overlayVisible ? null : _androidNavigation(c)),
+      ),
     );
   }
 
@@ -398,6 +423,69 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _IOSHomeHeader extends StatelessWidget {
+  const _IOSHomeHeader({required this.onForget});
+
+  final VoidCallback onForget;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          'OpenSocks',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: CupertinoColors.label.resolveFrom(context),
+          ),
+        ),
+        Text(
+          'CHINA ROUTE CONTROLLER',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.normal,
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
+      ],
+    );
+    final action = AdaptiveAppBarAction(
+      iosSymbol: 'iphone.slash',
+      icon: Icons.phonelink_erase,
+      onPressed: onForget,
+    );
+    final toolbar = PlatformInfo.isIOS26OrHigher()
+        ? IOS26NativeToolbar(
+            title: 'OpenSocks',
+            titleWidget: title,
+            actions: [action],
+            onActionTap: (_) => onForget(),
+            tintColor: Theme.of(context).colorScheme.primary,
+          )
+        : CupertinoNavigationBar(
+            backgroundColor: Colors.transparent,
+            border: null,
+            middle: title,
+            trailing: CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: onForget,
+              child: const Icon(CupertinoIcons.device_phone_portrait),
+            ),
+          );
+
+    return ColoredBox(
+      color: Colors.transparent,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(height: 44, child: toolbar),
       ),
     );
   }

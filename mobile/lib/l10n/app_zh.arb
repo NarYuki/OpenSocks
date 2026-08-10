@@ -10,7 +10,7 @@
   "smartDescription": "仅将中国方向流量发送到 OpenSocks",
   "globalRouting": "全中国线路路由", "globalDescription": "将 LAN 的全部网页流量发送到 OpenSocks",
   "changingMode": "正在更改路由模式", "modeChanged": "路由模式已更改",
-  "protected": "已保护", "notConnected": "未连接", "tapToConnect": "点击连接",
+  "protected": "回国ing", "notConnected": "未连接", "tapToConnect": "点击连接",
   "selectServer": "选择服务器", "routeStopped": "网络路由已停止",
   "routeHealthy": "网络路由正常", "routeRestoring": "正在恢复网络路由",
   "notSignedIn": "未登录", "daysLeft": "剩余 {days} 天",

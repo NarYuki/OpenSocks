@@ -235,7 +235,7 @@ abstract class AppLocalizations {
   /// No description provided for @protected.
   ///
   /// In ja, this message translates to:
-  /// **'保護されています'**
+  /// **'回国ing'**
   String get protected;
 
   /// No description provided for @notConnected.

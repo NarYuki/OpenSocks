@@ -10,7 +10,7 @@
   "smartDescription": "Route only China-bound traffic through OpenSocks",
   "globalRouting": "Full China routing", "globalDescription": "Route all LAN web traffic through OpenSocks",
   "changingMode": "Changing routing mode", "modeChanged": "Routing mode changed",
-  "protected": "Protected", "notConnected": "Not connected", "tapToConnect": "Tap to connect",
+  "protected": "回国ing", "notConnected": "Not connected", "tapToConnect": "Tap to connect",
   "selectServer": "Select server", "routeStopped": "Network route is stopped",
   "routeHealthy": "Network route is healthy", "routeRestoring": "Restoring network route",
   "notSignedIn": "Not signed in", "daysLeft": "{days} days remaining",

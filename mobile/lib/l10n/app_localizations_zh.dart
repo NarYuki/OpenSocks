@@ -75,7 +75,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modeChanged => '路由模式已更改';
 
   @override
-  String get protected => '已保护';
+  String get protected => '回国ing';
 
   @override
   String get notConnected => '未连接';

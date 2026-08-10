@@ -10,7 +10,7 @@
   "smartDescription": "中国向け通信だけをOpenSocksへ送信",
   "globalRouting": "フル中国回線ルーティング", "globalDescription": "LANのWeb通信全体をOpenSocksへ送信",
   "changingMode": "ルーティングモード変更中", "modeChanged": "ルーティングモードを変更しました",
-  "protected": "保護されています", "notConnected": "未接続", "tapToConnect": "タップして接続",
+  "protected": "回国ing", "notConnected": "未接続", "tapToConnect": "タップして接続",
   "selectServer": "サーバーを選択", "routeStopped": "ネットワーク経路は停止中です",
   "routeHealthy": "ネットワーク経路は正常です", "routeRestoring": "ネットワーク経路を復元中",
   "notSignedIn": "未ログイン", "daysLeft": "残り{days}日", "@daysLeft": {"placeholders":{"days":{}}},

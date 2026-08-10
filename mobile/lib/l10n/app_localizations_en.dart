@@ -77,7 +77,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modeChanged => 'Routing mode changed';
 
   @override
-  String get protected => 'Protected';
+  String get protected => '回国ing';
 
   @override
   String get notConnected => 'Not connected';
