@@ -8,7 +8,7 @@ OpenSocksは中国向け回線をOpenWrtから利用するための省メモリ�
 
 - スマート：中国サービスはTransocks中国回線、X・YouTube・Google等は元のWAN回線
 - フル中国回線：LAN/Wi-Fiの公開先TCP/UDPをすべてTransocks中国回線へ転送
-- TCP REDIRECTとUDP TPROXY（王者栄耀のPVP UDP通信を含む）
+- TCP REDIRECTとUDP TPROXY
 - 選択サーバー固定、セッション更新、経路の自動復元
 - AES-256-GCMによる認証情報の暗号化保存
 - Ping順サーバー一覧、接続履歴、再接続
