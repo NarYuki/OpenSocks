@@ -10,7 +10,6 @@ OpenSocks 是用于在 OpenWrt 上使用 Transocks（穿梭）中国回国线路
 - 全中国线路路由：LAN/Wi-Fi 的公网 TCP/UDP 全部经 Transocks 中国线路
 - TCP REDIRECT 与 UDP TPROXY
 - 自动恢复路由、登录会话和固定选择的服务器
-- AES-256-GCM 加密保存登录信息
 - 服务器延迟排序、历史记录和一键重连
 - 中国服务分类流量统计、实时速率和累计流量
 - Ookla 中国节点与 SpeedTest.cn 测速

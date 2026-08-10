@@ -10,7 +10,6 @@ OpenSocksはTransocks（穿梭）の中国向け回国回線サービスをOpenW
 - フル中国回線：LAN/Wi-Fiの公開先TCP/UDPをすべてTransocks中国回線へ転送
 - TCP REDIRECTとUDP TPROXY
 - 選択サーバー固定、セッション更新、経路の自動復元
-- AES-256-GCMによる認証情報の暗号化保存
 - Ping順サーバー一覧、接続履歴、再接続
 - 中国サービス別通信量、リアルタイム速度、累積通信量
 - 中国国内Ookla／SpeedTest.cn測定

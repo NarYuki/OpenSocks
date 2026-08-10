@@ -10,7 +10,6 @@ OpenSocks is an open-source OpenWrt client for the Transocks China return-route 
 - Full China routing sends all public TCP/UDP from LAN and Wi-Fi through the Transocks China line
 - TCP REDIRECT and UDP TPROXY
 - Persistent server selection, session recovery, and automatic route restoration
-- AES-256-GCM encrypted credential storage
 - Latency-sorted servers, connection history, and reconnect actions
 - Per-service China traffic, live rates, and persistent totals
 - Ookla China and SpeedTest.cn testing
