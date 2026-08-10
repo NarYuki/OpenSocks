@@ -25,9 +25,18 @@ refresh_release_metadata() {
 	command -v usign >/dev/null 2>&1 || return 1
 	[ -s "$feed_key" ] || return 1
 	rm -f "$dir/Packages.new" "$dir/Packages.sig.new"
-	wget -q -O "$dir/Packages.new" "$feed/Packages" || return 1
-	wget -q -O "$dir/Packages.sig.new" "$feed/Packages.sig" || return 1
-	usign -V -m "$dir/Packages.new" -p "$feed_key" -x "$dir/Packages.sig.new" >/dev/null 2>&1 || return 1
+	wget -q -O "$dir/Packages.new" "$feed/Packages" || {
+		rm -f "$dir/Packages.new" "$dir/Packages.sig.new"
+		return 1
+	}
+	wget -q -O "$dir/Packages.sig.new" "$feed/Packages.sig" || {
+		rm -f "$dir/Packages.new" "$dir/Packages.sig.new"
+		return 1
+	}
+	usign -V -m "$dir/Packages.new" -p "$feed_key" -x "$dir/Packages.sig.new" >/dev/null 2>&1 || {
+		rm -f "$dir/Packages.new" "$dir/Packages.sig.new"
+		return 1
+	}
 	mv "$dir/Packages.new" "$dir/Packages"
 	mv "$dir/Packages.sig.new" "$dir/Packages.sig"
 	new_sha="$(package_field X-OpenSocks-Binary-SHA256)"
