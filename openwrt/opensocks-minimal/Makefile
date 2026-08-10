@@ -13,7 +13,6 @@ define Package/opensocks-minimal
   SUBMENU:=Proxy
   TITLE:=Download-on-boot minimal OpenSocks launcher
   DEPENDS:=+shadowsocks-libev-ss-redir +shadowsocks-libev-ss-local +nftables-json +kmod-nft-tproxy +ca-bundle +uci +wget-ssl
-  PROVIDES:=opensocks
   CONFLICTS:=opensocks
 endef
 

@@ -24,6 +24,7 @@ define Package/opensocks
   SUBMENU:=Proxy
   TITLE:=Low-memory Transocks proxy daemon for OpenWrt
   DEPENDS:=+shadowsocks-libev-ss-redir +shadowsocks-libev-ss-local +nftables-json +kmod-nft-tproxy +ca-bundle +uci
+  CONFLICTS:=opensocks-minimal
 endef
 
 define Package/opensocks/description

@@ -5,7 +5,7 @@ PKG_VERSION:=0.2.0
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-3.0-or-later
 
-LUCI_DEPENDS:=+opensocks +luci-base +luci-compat +curl
+LUCI_DEPENDS:=+(opensocks||opensocks-minimal) +luci-base +luci-compat +curl
 
 include $(TOPDIR)/feeds/luci/luci.mk
 

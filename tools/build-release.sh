@@ -31,6 +31,7 @@ cat > "$daemon_control/control" <<EOF
 Package: opensocks
 Version: ${VERSION}-1
 Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci
+Conflicts: opensocks-minimal
 Source: opensocks
 Section: net
 Architecture: mipsel_24kc
@@ -69,7 +70,6 @@ cat > "$minimal_control/control" <<EOF
 Package: opensocks-minimal
 Version: ${VERSION}-1
 Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci, wget-ssl
-Provides: opensocks
 Conflicts: opensocks
 Source: opensocks-minimal
 Section: net
@@ -100,7 +100,7 @@ mkdir -p "$luci_control" "$luci_data/usr/lib/lua/luci/controller" "$luci_data/us
 cat > "$luci_control/control" <<EOF
 Package: luci-app-opensocks
 Version: ${VERSION}-1
-Depends: libc, opensocks, luci-base, luci-compat, curl
+Depends: libc, opensocks | opensocks-minimal, luci-base, luci-compat, curl
 Source: luci-app-opensocks
 Section: luci
 Architecture: all
