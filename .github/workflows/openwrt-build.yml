@@ -73,7 +73,7 @@ jobs:
           "${RUNNER_TEMP}/usign/build/usign" -V -m "$RELEASE_DIR/SHA256SUMS" -p "$GITHUB_WORKSPACE/keys/d24a5e234001294c" -x "$RELEASE_DIR/SHA256SUMS.sig"
 
       - name: Upload OpenWrt artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opensocks-openwrt-${{ github.sha }}
           path: ${{ runner.temp }}/opensocks-release/
