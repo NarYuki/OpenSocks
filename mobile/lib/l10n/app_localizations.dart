@@ -376,6 +376,84 @@ abstract class AppLocalizations {
   /// **'サーバー取得エラー: {error}'**
   String serverFetchError(Object error);
 
+  /// No description provided for @retry.
+  ///
+  /// In ja, this message translates to:
+  /// **'再試行'**
+  String get retry;
+
+  /// No description provided for @trafficErrorTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'通信量を取得できませんでした'**
+  String get trafficErrorTitle;
+
+  /// No description provided for @trafficErrorMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'ルーターとの通信を確認して、もう一度読み込んでください。'**
+  String get trafficErrorMessage;
+
+  /// No description provided for @chinaRouteErrorTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'中国経路テストに失敗しました'**
+  String get chinaRouteErrorTitle;
+
+  /// No description provided for @chinaRouteErrorMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'中国回線への接続状態を確認して、もう一度テストしてください。'**
+  String get chinaRouteErrorMessage;
+
+  /// No description provided for @speedtestCnErrorTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'SpeedTest.cnサーバーを取得できませんでした'**
+  String get speedtestCnErrorTitle;
+
+  /// No description provided for @speedtestCnErrorMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'SpeedTest.cnの中国ノードAPIへ接続できませんでした。時間を置いて再試行してください。'**
+  String get speedtestCnErrorMessage;
+
+  /// No description provided for @ooklaErrorTitle.
+  ///
+  /// In ja, this message translates to:
+  /// **'Ooklaサーバーを取得できませんでした'**
+  String get ooklaErrorTitle;
+
+  /// No description provided for @ooklaErrorMessage.
+  ///
+  /// In ja, this message translates to:
+  /// **'Ooklaの中国サーバー一覧へ接続できませんでした。時間を置いて再試行してください。'**
+  String get ooklaErrorMessage;
+
+  /// No description provided for @routerConnectionError.
+  ///
+  /// In ja, this message translates to:
+  /// **'ルーターへ接続できません。Wi-FiまたはTailscale接続を確認してください。'**
+  String get routerConnectionError;
+
+  /// No description provided for @routerTimeoutError.
+  ///
+  /// In ja, this message translates to:
+  /// **'応答が時間内に返りませんでした。'**
+  String get routerTimeoutError;
+
+  /// No description provided for @invalidResponseError.
+  ///
+  /// In ja, this message translates to:
+  /// **'ルーターから正しい応答を受信できませんでした。'**
+  String get invalidResponseError;
+
+  /// No description provided for @serverResponseError.
+  ///
+  /// In ja, this message translates to:
+  /// **'ルーター側の処理に失敗しました。'**
+  String get serverResponseError;
+
   /// No description provided for @completed.
   ///
   /// In ja, this message translates to:

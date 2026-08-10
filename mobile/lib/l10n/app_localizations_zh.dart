@@ -157,6 +157,45 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get retry => '重试';
+
+  @override
+  String get trafficErrorTitle => '无法获取流量数据';
+
+  @override
+  String get trafficErrorMessage => '请检查与路由器的连接后重新加载。';
+
+  @override
+  String get chinaRouteErrorTitle => '中国线路测试失败';
+
+  @override
+  String get chinaRouteErrorMessage => '请检查中国线路连接状态后重新测试。';
+
+  @override
+  String get speedtestCnErrorTitle => '无法获取SpeedTest.cn服务器';
+
+  @override
+  String get speedtestCnErrorMessage => '无法连接SpeedTest.cn中国节点API，请稍后重试。';
+
+  @override
+  String get ooklaErrorTitle => '无法获取Ookla服务器';
+
+  @override
+  String get ooklaErrorMessage => '无法连接Ookla中国服务器列表，请稍后重试。';
+
+  @override
+  String get routerConnectionError => '无法连接路由器，请检查Wi-Fi或Tailscale连接。';
+
+  @override
+  String get routerTimeoutError => '路由器未在规定时间内响应。';
+
+  @override
+  String get invalidResponseError => '路由器返回了无效响应。';
+
+  @override
+  String get serverResponseError => '路由器端处理失败。';
+
+  @override
   String get completed => '操作完成';
 
   @override

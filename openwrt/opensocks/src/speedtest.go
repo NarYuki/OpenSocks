@@ -18,11 +18,13 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
 const ooklaServersURL = "https://www.speedtest.net/api/js/servers?engine=js&search=China&limit=30"
 const speedTestCNNodesURL = "https://nodes-api.speedtest.cn?type=multi&https=1&browser=1&domainType=2&use_cdn=1"
+const speedSOCKSPIDFile = "/tmp/opensocks/speedtest-ss-local.pid"
 
 type speedServer struct {
 	URL       string  `json:"url"`
@@ -102,8 +104,7 @@ func measureSpeedHTTPPings[T *speedServer | *speedTestCNServer](servers []T, url
 		return
 	}
 	defer func() {
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
+		stopSpeedSOCKS(cmd)
 		speedMu.Unlock()
 	}()
 	client := &http.Client{
@@ -246,8 +247,7 @@ func discoverSpeedTestCNServers() ([]speedTestCNServer, error) {
 		return nil, err
 	}
 	defer func() {
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
+		stopSpeedSOCKS(cmd)
 		speedMu.Unlock()
 	}()
 	req, _ := http.NewRequest("GET", speedTestCNNodesURL, nil)
@@ -297,7 +297,7 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	defer stopSpeedSOCKS(cmd)
 	client := &http.Client{Transport: &http.Transport{
 		DialContext:         socksDial,
 		DisableCompression:  true,
@@ -361,14 +361,53 @@ func startSpeedSOCKS() (*exec.Cmd, error) {
 	if _, err := exec.LookPath("ss-local"); err != nil {
 		return nil, fmt.Errorf("ss-local is required for China-route speed testing")
 	}
+	cleanupStaleSpeedSOCKS()
 	cmd := exec.Command("ss-local", "-c", engineConf, "-b", "127.0.0.1", "-l", fmt.Sprint(socksPort), "-u")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
+	if err := os.WriteFile(speedSOCKSPIDFile, []byte(strconv.Itoa(cmd.Process.Pid)), 0600); err != nil {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+		return nil, err
+	}
 	time.Sleep(500 * time.Millisecond)
+	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+		stopSpeedSOCKS(cmd)
+		return nil, fmt.Errorf("China-route test helper stopped during startup")
+	}
 	return cmd, nil
+}
+
+func cleanupStaleSpeedSOCKS() {
+	raw, err := os.ReadFile(speedSOCKSPIDFile)
+	if err != nil {
+		return
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+	if err == nil && pid > 1 {
+		cmdline, _ := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+		if strings.Contains(strings.ReplaceAll(string(cmdline), "\x00", " "), "ss-local") {
+			if process, findErr := os.FindProcess(pid); findErr == nil {
+				_ = process.Kill()
+			}
+		}
+	}
+	_ = os.Remove(speedSOCKSPIDFile)
+}
+
+func stopSpeedSOCKS(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Kill()
+	_, _ = cmd.Process.Wait()
+	raw, err := os.ReadFile(speedSOCKSPIDFile)
+	if err == nil && strings.TrimSpace(string(raw)) == strconv.Itoa(cmd.Process.Pid) {
+		_ = os.Remove(speedSOCKSPIDFile)
+	}
 }
 
 func socksDial(ctx context.Context, network, address string) (net.Conn, error) {
@@ -429,7 +468,7 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	defer stopSpeedSOCKS(cmd)
 	tr := &http.Transport{
 		DialContext:         socksDial,
 		MaxIdleConns:        8,

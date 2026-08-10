@@ -39,7 +39,7 @@ func testChinaExitRegion() (*regionTestResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
+	defer stopSpeedSOCKS(cmd)
 	client := &http.Client{
 		Transport: &http.Transport{DialContext: socksDial, DisableKeepAlives: true},
 		Timeout:   15 * time.Second,

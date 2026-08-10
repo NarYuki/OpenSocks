@@ -352,7 +352,9 @@ class _HomePageState extends State<HomePage> {
         tabBarHidden: overlayVisible,
         minimizeBehavior: TabBarMinimizeBehavior.never,
         enableBlur: true,
-        children: [SafeArea(top: true, bottom: false, child: body)],
+        children: [
+          ColoredBox(color: Theme.of(c).scaffoldBackgroundColor, child: body),
+        ],
       );
     }
 
@@ -376,6 +378,7 @@ class _HomePageState extends State<HomePage> {
           fontSize: 17,
           fontWeight: FontWeight.w600,
           color: CupertinoColors.label.resolveFrom(context),
+          decoration: TextDecoration.none,
         ),
       ),
       Text(
@@ -384,6 +387,7 @@ class _HomePageState extends State<HomePage> {
           fontSize: 12,
           fontWeight: FontWeight.normal,
           color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          decoration: TextDecoration.none,
         ),
       ),
     ],
@@ -466,6 +470,14 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+double pageTopPadding(BuildContext context, double base) {
+  if (Theme.of(context).platform == TargetPlatform.iOS &&
+      PlatformInfo.isIOS26OrHigher()) {
+    return MediaQuery.paddingOf(context).top + base;
+  }
+  return base;
+}
+
 String bytes(num n) {
   const u = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
   double v = n.toDouble();
@@ -495,6 +507,71 @@ void toast(BuildContext c, Object v, [bool bad = false]) {
       backgroundColor: bad ? Theme.of(c).colorScheme.error : null,
     ),
   );
+}
+
+String apiErrorMessage(BuildContext c, Object error) {
+  if (error is OpenSocksApiException) {
+    return switch (error.kind) {
+      OpenSocksApiErrorKind.connection => c.l10n.routerConnectionError,
+      OpenSocksApiErrorKind.timeout => c.l10n.routerTimeoutError,
+      OpenSocksApiErrorKind.response => c.l10n.invalidResponseError,
+      OpenSocksApiErrorKind.server => c.l10n.serverResponseError,
+    };
+  }
+  return c.l10n.serverResponseError;
+}
+
+class AppErrorPanel extends StatelessWidget {
+  const AppErrorPanel({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.onRetry,
+    this.icon = Icons.error_outline_rounded,
+  });
+
+  final String title;
+  final String message;
+  final VoidCallback onRetry;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      color: colors.errorContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 34, color: colors.onErrorContainer),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: colors.onErrorContainer,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.onErrorContainer),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(context.l10n.retry),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class OverviewPage extends StatefulWidget {
@@ -741,7 +818,7 @@ class _OverviewPageState extends State<OverviewPage> {
     return RefreshIndicator(
       onRefresh: refresh,
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(16, pageTopPadding(c, 16), 16, 16),
         children: [
           Center(
             child: Container(
@@ -1339,6 +1416,7 @@ class TrafficPage extends StatefulWidget {
 
 class _TrafficPageState extends State<TrafficPage> {
   Map<String, dynamic>? data;
+  Object? loadError;
   Timer? timer;
   @override
   void initState() {
@@ -1356,13 +1434,34 @@ class _TrafficPageState extends State<TrafficPage> {
   Future<void> load() async {
     try {
       final x = await widget.api.get('traffic');
-      if (mounted) setState(() => data = x);
-    } catch (_) {}
+      if (mounted) {
+        setState(() {
+          data = x;
+          loadError = null;
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => loadError = error);
+    }
   }
 
   @override
   Widget build(BuildContext c) {
     final d = data;
+    if (d == null && loadError != null) {
+      return ListView(
+        padding: EdgeInsets.fromLTRB(16, pageTopPadding(c, 16), 16, 16),
+        children: [
+          AppErrorPanel(
+            title: c.l10n.trafficErrorTitle,
+            message:
+                '${c.l10n.trafficErrorMessage}\n${apiErrorMessage(c, loadError!)}',
+            onRetry: load,
+            icon: Icons.bar_chart_rounded,
+          ),
+        ],
+      );
+    }
     if (d == null) return const Center(child: CircularProgressIndicator());
     final services =
         (d['services'] is Map
@@ -1376,8 +1475,15 @@ class _TrafficPageState extends State<TrafficPage> {
             ),
           );
     return ListView(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.fromLTRB(12, pageTopPadding(c, 12), 12, 12),
       children: [
+        if (loadError != null)
+          AppErrorPanel(
+            title: c.l10n.trafficErrorTitle,
+            message: apiErrorMessage(c, loadError!),
+            onRetry: load,
+            icon: Icons.bar_chart_rounded,
+          ),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -1430,6 +1536,7 @@ class TestsPage extends StatefulWidget {
 class _TestsPageState extends State<TestsPage> {
   Map<String, dynamic>? region, progress;
   List<dynamic> ookla = [], cn = [];
+  Object? regionError, ooklaError, cnError;
   String? ooklaID, cnID;
   bool busy = false;
   bool pollingProgress = false;
@@ -1444,9 +1551,14 @@ class _TestsPageState extends State<TestsPage> {
     setState(() => busy = true);
     try {
       final x = await widget.api.get('regiontest', timeout: 45);
-      if (mounted) setState(() => region = x);
+      if (mounted) {
+        setState(() {
+          region = x;
+          regionError = null;
+        });
+      }
     } catch (e) {
-      if (mounted) toast(context, e, true);
+      if (mounted) setState(() => regionError = e);
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -1462,15 +1574,25 @@ class _TestsPageState extends State<TestsPage> {
         setState(() {
           if (type == 'ookla') {
             ookla = x['servers'] ?? [];
+            ooklaError = null;
             ooklaID = ookla.isEmpty ? null : '${ookla.first['id']}';
           } else {
             cn = x['servers'] ?? [];
+            cnError = null;
             cnID = cn.isEmpty ? null : '${cn.first['id']}';
           }
         });
       }
     } catch (e) {
-      if (mounted) toast(context, e, true);
+      if (mounted) {
+        setState(() {
+          if (type == 'ookla') {
+            ooklaError = e;
+          } else {
+            cnError = e;
+          }
+        });
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -1521,7 +1643,7 @@ class _TestsPageState extends State<TestsPage> {
 
   @override
   Widget build(BuildContext c) => ListView(
-    padding: const EdgeInsets.all(12),
+    padding: EdgeInsets.fromLTRB(12, pageTopPadding(c, 12), 12, 12),
     children: [
       Card(
         child: Padding(
@@ -1547,6 +1669,16 @@ class _TestsPageState extends State<TestsPage> {
                 ),
                 Text(
                   '${region!['provider'] ?? ''} / ${region!['organization'] ?? ''}',
+                ),
+              ],
+              if (regionError != null) ...[
+                const SizedBox(height: 12),
+                AppErrorPanel(
+                  title: c.l10n.chinaRouteErrorTitle,
+                  message:
+                      '${c.l10n.chinaRouteErrorMessage}\n${apiErrorMessage(c, regionError!)}',
+                  onRetry: regionTest,
+                  icon: Icons.location_off_rounded,
                 ),
               ],
             ],
@@ -1762,26 +1894,32 @@ class _TestsPageState extends State<TestsPage> {
                     ),
                     if (snapshot.connectionState != ConnectionState.done)
                       const LinearProgressIndicator(),
-                    if (snapshot.hasError)
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          context.l10n.serverFetchError('${snapshot.error}'),
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                      ),
                     Expanded(
                       child: TabBarView(
                         children: [
-                          _speedServerList(context, cn, 'cn', search.text),
-                          _speedServerList(
-                            context,
-                            ookla,
-                            'ookla',
-                            search.text,
-                          ),
+                          cnError == null
+                              ? _speedServerList(context, cn, 'cn', search.text)
+                              : _speedServerError(
+                                  context,
+                                  title: context.l10n.speedtestCnErrorTitle,
+                                  message:
+                                      '${context.l10n.speedtestCnErrorMessage}\n${apiErrorMessage(context, cnError!)}',
+                                  type: 'cn',
+                                ),
+                          ooklaError == null
+                              ? _speedServerList(
+                                  context,
+                                  ookla,
+                                  'ookla',
+                                  search.text,
+                                )
+                              : _speedServerError(
+                                  context,
+                                  title: context.l10n.ooklaErrorTitle,
+                                  message:
+                                      '${context.l10n.ooklaErrorMessage}\n${apiErrorMessage(context, ooklaError!)}',
+                                  type: 'ookla',
+                                ),
                         ],
                       ),
                     ),
@@ -1803,19 +1941,57 @@ class _TestsPageState extends State<TestsPage> {
     if (newRegion == null) {
       try {
         newRegion = await widget.api.get('regiontest', timeout: 45);
-      } catch (_) {}
+      } catch (error) {
+        regionError = error;
+      }
     }
-    final results = await Future.wait([
-      widget.api.get('speedtestcn/servers', timeout: 60),
-      widget.api.get('speedtest/servers', timeout: 60),
+    Map<String, dynamic>? cnResult, ooklaResult;
+    Object? nextCnError, nextOoklaError;
+    await Future.wait([
+      widget.api
+          .get('speedtestcn/servers', timeout: 60)
+          .then((value) => cnResult = value)
+          .catchError((Object error) {
+            nextCnError = error;
+            return <String, dynamic>{};
+          }),
+      widget.api
+          .get('speedtest/servers', timeout: 60)
+          .then((value) => ooklaResult = value)
+          .catchError((Object error) {
+            nextOoklaError = error;
+            return <String, dynamic>{};
+          }),
     ]);
     if (!mounted) return;
     setState(() {
       region = newRegion;
-      cn = results[0]['servers'] ?? [];
-      ookla = results[1]['servers'] ?? [];
+      cnError = nextCnError;
+      ooklaError = nextOoklaError;
+      if (cnResult != null) cn = cnResult!['servers'] ?? [];
+      if (ooklaResult != null) ookla = ooklaResult!['servers'] ?? [];
     });
   }
+
+  Widget _speedServerError(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String type,
+  }) => ListView(
+    padding: const EdgeInsets.all(18),
+    children: [
+      AppErrorPanel(
+        title: title,
+        message: message,
+        onRetry: () {
+          Navigator.pop(context);
+          Future<void>.delayed(Duration.zero, chooseSpeedServer);
+        },
+        icon: Icons.cloud_off_rounded,
+      ),
+    ],
+  );
 
   Widget _speedServerList(
     BuildContext c,
@@ -2195,7 +2371,7 @@ class _AccountPageState extends State<AccountPage> {
     return RefreshIndicator(
       onRefresh: load,
       child: ListView(
-        padding: const EdgeInsets.all(18),
+        padding: EdgeInsets.fromLTRB(18, pageTopPadding(c, 18), 18, 18),
         children: [
           Card(
             child: Padding(

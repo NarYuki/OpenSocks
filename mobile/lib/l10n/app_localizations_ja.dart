@@ -157,6 +157,47 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get retry => '再試行';
+
+  @override
+  String get trafficErrorTitle => '通信量を取得できませんでした';
+
+  @override
+  String get trafficErrorMessage => 'ルーターとの通信を確認して、もう一度読み込んでください。';
+
+  @override
+  String get chinaRouteErrorTitle => '中国経路テストに失敗しました';
+
+  @override
+  String get chinaRouteErrorMessage => '中国回線への接続状態を確認して、もう一度テストしてください。';
+
+  @override
+  String get speedtestCnErrorTitle => 'SpeedTest.cnサーバーを取得できませんでした';
+
+  @override
+  String get speedtestCnErrorMessage =>
+      'SpeedTest.cnの中国ノードAPIへ接続できませんでした。時間を置いて再試行してください。';
+
+  @override
+  String get ooklaErrorTitle => 'Ooklaサーバーを取得できませんでした';
+
+  @override
+  String get ooklaErrorMessage => 'Ooklaの中国サーバー一覧へ接続できませんでした。時間を置いて再試行してください。';
+
+  @override
+  String get routerConnectionError =>
+      'ルーターへ接続できません。Wi-FiまたはTailscale接続を確認してください。';
+
+  @override
+  String get routerTimeoutError => '応答が時間内に返りませんでした。';
+
+  @override
+  String get invalidResponseError => 'ルーターから正しい応答を受信できませんでした。';
+
+  @override
+  String get serverResponseError => 'ルーター側の処理に失敗しました。';
+
+  @override
   String get completed => '完了しました';
 
   @override

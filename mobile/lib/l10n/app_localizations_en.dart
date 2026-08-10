@@ -159,6 +159,50 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get retry => 'Try again';
+
+  @override
+  String get trafficErrorTitle => 'Could not load traffic';
+
+  @override
+  String get trafficErrorMessage =>
+      'Check the connection to the router and load it again.';
+
+  @override
+  String get chinaRouteErrorTitle => 'China route test failed';
+
+  @override
+  String get chinaRouteErrorMessage =>
+      'Check the China connection and run the test again.';
+
+  @override
+  String get speedtestCnErrorTitle => 'Could not load SpeedTest.cn servers';
+
+  @override
+  String get speedtestCnErrorMessage =>
+      'The SpeedTest.cn China node API could not be reached. Try again shortly.';
+
+  @override
+  String get ooklaErrorTitle => 'Could not load Ookla servers';
+
+  @override
+  String get ooklaErrorMessage =>
+      'The Ookla China server directory could not be reached. Try again shortly.';
+
+  @override
+  String get routerConnectionError =>
+      'Could not reach the router. Check Wi-Fi or the Tailscale connection.';
+
+  @override
+  String get routerTimeoutError => 'The router did not respond in time.';
+
+  @override
+  String get invalidResponseError => 'The router returned an invalid response.';
+
+  @override
+  String get serverResponseError => 'The operation failed on the router.';
+
+  @override
   String get completed => 'Completed';
 
   @override

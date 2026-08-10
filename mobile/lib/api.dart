@@ -1,5 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
+enum OpenSocksApiErrorKind { connection, timeout, response, server }
+
+class OpenSocksApiException implements Exception {
+  const OpenSocksApiException(this.kind, {this.statusCode, this.detail});
+
+  final OpenSocksApiErrorKind kind;
+  final int? statusCode;
+  final String? detail;
+
+  @override
+  String toString() => detail ?? kind.name;
+}
 
 class OpenSocksApi {
   OpenSocksApi(this.baseUrl, this.token);
@@ -29,20 +43,33 @@ class OpenSocksApi {
       try {
         decoded = jsonDecode(text);
       } catch (_) {
-        throw Exception(
-          'HTTP ${res.statusCode}: ${text.substring(0, text.length.clamp(0, 160))}',
+        throw OpenSocksApiException(
+          OpenSocksApiErrorKind.response,
+          statusCode: res.statusCode,
         );
       }
       if (res.statusCode < 200 || res.statusCode >= 300 || decoded is! Map) {
-        throw Exception(
-          decoded is Map
-              ? (decoded['error'] ?? 'HTTP ${res.statusCode}')
-              : 'HTTP ${res.statusCode}',
+        throw OpenSocksApiException(
+          OpenSocksApiErrorKind.server,
+          statusCode: res.statusCode,
+          detail: decoded is Map ? decoded['error']?.toString() : null,
         );
       }
       final data = Map<String, dynamic>.from(decoded);
-      if (data['error'] != null) throw Exception(data['error']);
+      if (data['error'] != null) {
+        throw OpenSocksApiException(
+          OpenSocksApiErrorKind.server,
+          statusCode: res.statusCode,
+          detail: data['error'].toString(),
+        );
+      }
       return data;
+    } on TimeoutException {
+      throw const OpenSocksApiException(OpenSocksApiErrorKind.timeout);
+    } on SocketException {
+      throw const OpenSocksApiException(OpenSocksApiErrorKind.connection);
+    } on HandshakeException {
+      throw const OpenSocksApiException(OpenSocksApiErrorKind.connection);
     } finally {
       client.close(force: true);
     }
