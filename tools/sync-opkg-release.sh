@@ -38,8 +38,21 @@ test "$("$usign_bin" -F -p "$stage/$public_key_fingerprint")" = "$public_key_fin
 "$usign_bin" -V -m "$stage/SHA256SUMS" -p "$stage/$public_key_fingerprint" -x "$stage/SHA256SUMS.sig"
 (cd "$stage" && sha256sum -c SHA256SUMS)
 gzip -t "$stage/Packages.gz"
-chmod 0755 "$stage"
-chmod 0644 "$stage"/*
+
+# Cloudflare may ignore query strings in its cache key. Publish immutable,
+# content-addressed aliases so updated packages and boot binaries can never be
+# confused with an older asset that used the same release filename.
+while read -r checksum relative; do
+	name="${relative#./}"
+	case "$name" in
+		Packages|Packages.gz|Packages.sig|SHA256SUMS|SHA256SUMS.sig|"$public_key_fingerprint") continue ;;
+	esac
+	mkdir -p "$stage/by-sha/$checksum"
+	ln -s "../../$name" "$stage/by-sha/$checksum/$name"
+done < "$stage/SHA256SUMS"
+
+find "$stage" -type d -exec chmod 0755 {} +
+find "$stage" -type f -exec chmod 0644 {} +
 
 generation=".opkg-$tag-$(date -u +%Y%m%dT%H%M%SZ)"
 final="$publish_root/$generation"

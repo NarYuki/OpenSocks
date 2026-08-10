@@ -65,7 +65,7 @@ minimal_control="$WORK/minimal-control"
 minimal_data="$WORK/minimal-data"
 mkdir -p "$minimal_control" "$minimal_data/etc/init.d" "$minimal_data/etc/config" "$minimal_data/etc/opensocks" "$minimal_data/usr/lib/opensocks"
 binary_sha="$(shasum -a 256 "$OUT/opensocks-linux-mipsle.gz" | awk '{print $1}')"
-binary_url="${BINARY_URL:-https://rel.n4t.su/opkg/opensocks-linux-mipsle.gz?sha=$binary_sha}"
+binary_url="${BINARY_URL:-https://rel.n4t.su/opkg/by-sha/$binary_sha/opensocks-linux-mipsle.gz}"
 cat > "$minimal_control/control" <<EOF
 Package: opensocks-minimal
 Version: ${VERSION}-1
@@ -124,9 +124,10 @@ build_ipk luci-app-opensocks all "$luci_control" "$luci_data"
 : > "$OUT/Packages"
 for ipk in "$OUT"/*.ipk; do
 	name="$(basename "$ipk")"
+	ipk_sha="$(shasum -a 256 "$ipk" | awk '{print $1}')"
 	tar -xOzf "$ipk" control.tar.gz | tar -xzO ./control >> "$OUT/Packages"
-	printf 'Filename: %s\nSize: %s\nSHA256sum: %s\n\n' "$name" "$(wc -c < "$ipk" | tr -d ' ')" \
-		"$(shasum -a 256 "$ipk" | awk '{print $1}')" >> "$OUT/Packages"
+	printf 'Filename: by-sha/%s/%s\nSize: %s\nSHA256sum: %s\n\n' "$ipk_sha" "$name" \
+		"$(wc -c < "$ipk" | tr -d ' ')" "$ipk_sha" >> "$OUT/Packages"
 done
 gzip -9c "$OUT/Packages" > "$OUT/Packages.gz"
 
