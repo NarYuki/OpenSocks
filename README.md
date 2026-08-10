@@ -1,82 +1,59 @@
 # OpenSocks for OpenWrt
 
-OpenSocks is a low-memory OpenWrt client and LuCI dashboard for China-route
-proxy connections. It uses `shadowsocks-libev` and nftables instead of a large
-all-in-one proxy core, making it suitable for memory-constrained routers.
+[中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
-The Flutter Android/iOS controller is available in [`mobile/`](mobile/). It
-provides connection, server, traffic, test, and account controls through a
-token-authenticated mobile API, with a VPN-style power button and a 100 ms
-live speed-test display.
+OpenSocks 是面向中国线路的低内存 OpenWrt 客户端、LuCI 管理界面和手机控制端。数据平面使用 `shadowsocks-libev` 与 nftables，不需要大型一体化代理核心，适合存储和内存有限的路由器。
 
-## Features
+## 主要功能
 
-- Smart China routing and an all-TCP China proxy mode
-- One-tap OpenWrt network integration
-- Persistent server selection, connection history, and reconnect actions
-- Saved credentials with automatic sign-in after session expiry
-- VIP/Free server filtering and latency sorting
-- Automatic routing restoration after router or daemon restarts
-- Per-service China traffic accounting with one-second LuCI updates
-- Passive DNS suffix learning for service subdomains and CDN hosts
-- Ookla China-server and SpeedTest.cn measurements from LuCI
-- English, Japanese, and Simplified Chinese interface support
-- Low-memory `ss-redir` data path with nftables interval sets
+- 智能中国路由和全中国线路路由
+- TCP REDIRECT 与 UDP TPROXY（包括《王者荣耀》PVP UDP 通信）
+- 自动恢复路由、登录会话和固定选择的服务器
+- AES-256-GCM 加密保存登录信息
+- 服务器延迟排序、历史记录和一键重连
+- 中国服务分类流量统计、实时速率和累计流量
+- Ookla 中国节点与 SpeedTest.cn 测速
+- LuCI、Android 和 iOS 支持中文、英文、日文
+- 约 1.8KB 的 minimal IPK；程序下载到 `/tmp`，设置保留在 `/etc`
 
-## Repository layout
+## 安装
 
-```text
-openwrt/
-├── opensocks/           Go daemon and OpenWrt service package
-└── luci-app-opensocks/  LuCI controller, dashboard, ACL, and translations
-```
-
-## Build
-
-Copy both package directories into an OpenWrt buildroot or add this repository
-as a package feed, then run:
+推荐使用软件源：
 
 ```sh
-./scripts/feeds update -a
-./scripts/feeds install -a
-make package/opensocks/compile V=s
-make package/luci-app-opensocks/compile V=s
+echo 'src/gz opensocks https://rel.n4t.su/opkg' >> /etc/opkg/customfeeds.conf
+opkg update
+opkg install opensocks-minimal luci-app-opensocks
 ```
 
-The daemon can also be tested on a development host:
+也可以从 [GitHub Releases](https://github.com/NarYuki/OpenSocks/releases/latest) 下载 IPK 后直接安装。完整的安装、登录、功能和手机配对说明请参阅：
+
+- [中文 Wiki](https://github.com/NarYuki/OpenSocks/wiki)
+- [English Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-en)
+- [日本語 Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-ja)
+
+## 项目结构
+
+```text
+openwrt/opensocks/          Go 服务和完整软件包
+openwrt/opensocks-minimal/  下载到 tmpfs 的最小启动器
+openwrt/luci-app-opensocks/ LuCI 界面和本地化
+mobile/                     Flutter Android/iOS 客户端
+tools/build-release.sh      IPK、opkg 索引和移动端发布构建
+```
+
+## 开发测试
 
 ```sh
 cd openwrt/opensocks/src
 go test ./...
-go build .
+go vet ./...
+
+cd ../../../mobile
+flutter analyze
+flutter test
 ```
 
-## Runtime dependencies
+## 许可证
 
-- `shadowsocks-libev-ss-redir`
-- `shadowsocks-libev-ss-local`
-- `nftables-json`
-- `ca-bundle`
-- `uci`
-- `luci-base`, `luci-compat`, and `curl` for the LuCI package
-
-After installing both generated packages:
-
-```sh
-/etc/init.d/opensocks enable
-/etc/init.d/opensocks start
-```
-
-Open `https://<router>/cgi-bin/luci/admin/services/opensocks`. Configure LuCI
-HTTPS before entering account credentials.
-
-Credentials and sessions are created only at runtime on the router and are not
-part of this repository. Do not commit `/etc/opensocks`, runtime UCI exports,
-logs, or captured API responses.
-
-Additional OpenWrt-specific details are in
-[openwrt/README.md](openwrt/README.md).
-
-## License
-
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+GPL-3.0-or-later，详见 [LICENSE](LICENSE)。
