@@ -477,7 +477,7 @@ class _IOSHomeHeader extends StatelessWidget {
             trailing: CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: onForget,
-              child: const Icon(CupertinoIcons.device_phone_portrait),
+              child: const Icon(Icons.phonelink_erase),
             ),
           );
 
