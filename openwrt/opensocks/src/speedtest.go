@@ -91,6 +91,60 @@ func measureSpeedServerPings[T *speedServer | *speedTestCNServer](servers []T, h
 	wg.Wait()
 }
 
+// measureSpeedHTTPPings measures the same HTTP path used by the benchmark
+// through the selected China proxy. A direct-WAN TCP connect can look fast even
+// when that node is unusably slow from the active OpenSocks line.
+func measureSpeedHTTPPings[T *speedServer | *speedTestCNServer](servers []T, urlOf func(T) string, setPing func(T, float64)) {
+	speedMu.Lock()
+	cmd, err := startSpeedSOCKS()
+	if err != nil {
+		speedMu.Unlock()
+		return
+	}
+	defer func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+		speedMu.Unlock()
+	}()
+	client := &http.Client{
+		Transport: &http.Transport{DialContext: socksDial, DisableKeepAlives: true},
+		Timeout:   3500 * time.Millisecond,
+	}
+	jobs := make(chan T)
+	var wg sync.WaitGroup
+	workers := 8
+	if len(servers) < workers {
+		workers = len(servers)
+	}
+	for worker := 0; worker < workers; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for server := range jobs {
+				started := time.Now()
+				separator := "?"
+				if strings.Contains(urlOf(server), "?") {
+					separator = "&"
+				}
+				resp, requestErr := client.Get(urlOf(server) + separator + "opensocks_ping=" + fmt.Sprint(time.Now().UnixNano()))
+				if requestErr != nil {
+					continue
+				}
+				_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+				resp.Body.Close()
+				if resp.StatusCode < 500 {
+					setPing(server, float64(time.Since(started).Microseconds())/1000)
+				}
+			}
+		}()
+	}
+	for i := range servers {
+		jobs <- servers[i]
+	}
+	close(jobs)
+	wg.Wait()
+}
+
 type speedTestCNResult struct {
 	Server          speedTestCNServer `json:"server"`
 	PingMS          float64           `json:"ping_ms"`
@@ -244,7 +298,13 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 		return nil, err
 	}
 	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
-	client := &http.Client{Transport: &http.Transport{DialContext: socksDial, DisableKeepAlives: true, DisableCompression: true}, Timeout: 12 * time.Second}
+	client := &http.Client{Transport: &http.Transport{
+		DialContext:         socksDial,
+		DisableCompression:  true,
+		MaxIdleConns:        8,
+		MaxIdleConnsPerHost: 4,
+		IdleConnTimeout:     20 * time.Second,
+	}, Timeout: 12 * time.Second}
 	setSpeedStage("ping")
 	var ping float64
 	for i := 0; i < 3; i++ {
@@ -370,7 +430,12 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 		return nil, err
 	}
 	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
-	tr := &http.Transport{DialContext: socksDial, DisableKeepAlives: true}
+	tr := &http.Transport{
+		DialContext:         socksDial,
+		MaxIdleConns:        8,
+		MaxIdleConnsPerHost: 4,
+		IdleConnTimeout:     20 * time.Second,
+	}
 	client := &http.Client{Transport: tr, Timeout: 12 * time.Second}
 	base := strings.TrimSuffix(server.URL, "upload.php")
 	setSpeedStage("ping")

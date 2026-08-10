@@ -1278,6 +1278,7 @@ class _TestsPageState extends State<TestsPage> {
   List<dynamic> ookla = [], cn = [];
   String? ooklaID, cnID;
   bool busy = false;
+  bool pollingProgress = false;
   Timer? progressTimer;
   @override
   void dispose() {
@@ -1332,7 +1333,7 @@ class _TestsPageState extends State<TestsPage> {
       });
       progressTimer?.cancel();
       progressTimer = Timer.periodic(
-        const Duration(milliseconds: 100),
+        const Duration(milliseconds: 150),
         (_) => pollProgress(),
       );
       await pollProgress();
@@ -1342,6 +1343,8 @@ class _TestsPageState extends State<TestsPage> {
   }
 
   Future<void> pollProgress() async {
+    if (pollingProgress) return;
+    pollingProgress = true;
     try {
       final x = await widget.api.get('speedtest/job/status');
       if (!mounted) return;
@@ -1355,7 +1358,11 @@ class _TestsPageState extends State<TestsPage> {
           toast(context, x['error'], true);
         }
       }
-    } catch (_) {}
+    } catch (_) {
+      // A later serialized poll will recover transient LAN latency.
+    } finally {
+      pollingProgress = false;
+    }
   }
 
   @override

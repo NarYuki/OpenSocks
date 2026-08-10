@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // server exposes the local control API used by the LuCI app.
@@ -104,7 +105,7 @@ func (s *server) handleSpeedTestCNServers(w http.ResponseWriter, r *http.Request
 	for i := range servers {
 		pointers[i] = &servers[i]
 	}
-	measureSpeedServerPings(pointers, func(server *speedTestCNServer) string { return server.Host }, func(server *speedTestCNServer, ping float64) { server.PingMS = ping })
+	measureSpeedHTTPPings(pointers, func(server *speedTestCNServer) string { return server.PingURL }, func(server *speedTestCNServer, ping float64) { server.PingMS = ping })
 	sort.SliceStable(servers, func(i, j int) bool {
 		return servers[i].PingMS > 0 && (servers[j].PingMS == 0 || servers[i].PingMS < servers[j].PingMS)
 	})
@@ -151,7 +152,9 @@ func (s *server) handleSpeedServers(w http.ResponseWriter, r *http.Request) {
 	for i := range servers {
 		pointers[i] = &servers[i]
 	}
-	measureSpeedServerPings(pointers, func(server *speedServer) string { return server.Host }, func(server *speedServer, ping float64) { server.PingMS = ping })
+	measureSpeedHTTPPings(pointers, func(server *speedServer) string {
+		return strings.TrimSuffix(server.URL, "upload.php") + "latency.txt"
+	}, func(server *speedServer, ping float64) { server.PingMS = ping })
 	sort.SliceStable(servers, func(i, j int) bool {
 		return servers[i].PingMS > 0 && (servers[j].PingMS == 0 || servers[i].PingMS < servers[j].PingMS)
 	})
