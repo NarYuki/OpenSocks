@@ -194,6 +194,13 @@ function action_settings()
             exclude_cidrs = req.exclude_cidrs,
         })))
     else
-        write_json(daemon_request("GET", "/settings", nil))
+        local data = daemon_request("GET", "/settings", nil)
+        local pairing = daemon_request("GET", "/mobile/pairing", nil)
+        if pairing and not pairing.error then
+            data.mobileURL = pairing.url
+            data.mobileToken = pairing.token
+            data.mobileEnabled = pairing.enabled
+        end
+        write_json(data)
     end
 end
