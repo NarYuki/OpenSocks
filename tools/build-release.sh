@@ -3,7 +3,7 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-0.2.0}"
-RELEASE="${RELEASE:-5}"
+RELEASE="${RELEASE:-6}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
@@ -76,7 +76,9 @@ binary_url="${BINARY_URL:-https://rel.n4t.su/opkg/by-sha/$binary_sha/opensocks-l
 cat > "$minimal_control/control" <<EOF
 Package: opensocks-minimal
 Version: ${VERSION}-${RELEASE}
-Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci, wget-ssl
+Depends: libc, shadowsocks-libev-ss-redir, shadowsocks-libev-ss-local, nftables-json, kmod-nft-tproxy, ca-bundle, uci, wget-ssl, usign
+X-OpenSocks-Binary-SHA256: $binary_sha
+X-OpenSocks-Binary-URL: $binary_url
 Source: opensocks-minimal
 Section: net
 Architecture: all
