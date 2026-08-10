@@ -18,7 +18,7 @@ case "$tag" in
 	*) printf 'Invalid release tag: %s\n' "$tag" >&2; exit 1 ;;
 esac
 version="${tag#v}"
-release="${PACKAGE_RELEASE:-4}"
+release="${PACKAGE_RELEASE:-5}"
 
 command -v curl >/dev/null
 command -v jq >/dev/null

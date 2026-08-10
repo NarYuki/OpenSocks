@@ -3,7 +3,7 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-0.2.0}"
-RELEASE="${RELEASE:-4}"
+RELEASE="${RELEASE:-5}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
@@ -45,8 +45,10 @@ EOF
 printf '/etc/config/opensocks\n' > "$daemon_control/conffiles"
 cat > "$daemon_control/postinst" <<'EOF'
 #!/bin/sh
-[ -n "$IPKG_INSTROOT" ] || /etc/init.d/opensocks enable
-[ -n "$IPKG_INSTROOT" ] || /etc/init.d/opensocks start || true
+if [ -z "${IPKG_INSTROOT:-}" ]; then
+	/etc/init.d/opensocks enable
+	( sleep 2; /etc/init.d/opensocks start >/dev/null 2>&1 || true ) &
+fi
 exit 0
 EOF
 cat > "$daemon_control/prerm" <<'EOF'
@@ -89,7 +91,7 @@ uci set opensocks.settings.binary_url='$binary_url'
 uci set opensocks.settings.binary_sha256='$binary_sha'
 uci commit opensocks
 /etc/init.d/opensocks enable
-/etc/init.d/opensocks start || true
+( sleep 2; /etc/init.d/opensocks start >/dev/null 2>&1 || true ) &
 exit 0
 EOF
 cp "$ROOT/openwrt/opensocks-minimal/files/etc/init.d/opensocks" "$minimal_data/etc/init.d/opensocks"
