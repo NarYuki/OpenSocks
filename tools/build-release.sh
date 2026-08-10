@@ -153,8 +153,7 @@ if [ "${OPENWRT_ONLY:-0}" = "1" ]; then
 	exit 0
 fi
 
-( cd "$ROOT/mobile" && flutter build apk --release && flutter build ios --release --no-codesign )
+( cd "$ROOT/mobile" && flutter build apk --release )
 cp "$ROOT/mobile/build/app/outputs/flutter-apk/app-release.apk" "$OUT/OpenSocks-${VERSION}-android.apk"
-( cd "$ROOT/mobile/build/ios/iphoneos" && zip -qry "$OUT/OpenSocks-${VERSION}-ios-unsigned.zip" Runner.app )
 write_checksums
 printf 'Release artifacts written to %s\n' "$OUT"

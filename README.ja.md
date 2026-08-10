@@ -1,5 +1,9 @@
 # OpenSocks for OpenWrt
 
+<p align="center">
+  <img src="assets/opensocks-icon-monochrome.png" alt="OpenSocks" width="192">
+</p>
+
 [中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
 OpenSocksはTransocks（穿梭）の中国向け回国回線サービスをOpenWrtから利用するためのオープンソースクライアントで、LuCI管理画面とスマホ操作アプリを提供します。サーバー回線の利用にはTransocksアカウントが必要です。大規模な統合プロキシコアを使わず、`shadowsocks-libev`とnftablesで動作します。本プロジェクトは独立実装であり、Transocks公式クライアントではありません。
@@ -32,6 +36,8 @@ opkg install opensocks-minimal luci-app-opensocks
 - [日本語 Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-ja)
 - [English Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-en)
 - [中文 Wiki](https://github.com/NarYuki/OpenSocks/wiki)
+
+スマホアプリは、Android版を[最新Release](https://github.com/NarYuki/OpenSocks/releases/latest)から、iOS版を[TestFlight](https://testflight.apple.com/join/eT82PtM1)からインストールできます。
 
 ## 開発時の確認
 

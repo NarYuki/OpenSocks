@@ -15,6 +15,10 @@ LuCIの「OpenSocks → スマホアプリ」で「連携情報を表示」を�
 
 外出先から利用する場合は、先にTailscaleなどでルーターへ接続してください。
 
+## iOS
+
+iOS版は[TestFlight](https://testflight.apple.com/join/eT82PtM1)からインストールします。
+
 ## ビルド
 
 ```sh
