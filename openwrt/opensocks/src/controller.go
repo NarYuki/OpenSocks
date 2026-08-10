@@ -209,24 +209,22 @@ func (c *controller) reauthenticate() error {
 }
 
 func (c *controller) getLinesAuthenticated() ([]line, error) {
-	lines, err := c.api.getLines()
+	var lines []line
+	var err error
+	for cycle := 0; cycle < 3; cycle++ {
+		lines, err = c.api.getLines()
+		if err == nil || !isAPIErrorCode(err, 20001) {
+			break
+		}
+		if authErr := c.reauthenticate(); authErr != nil {
+			return nil, authErr
+		}
+	}
 	if err == nil {
 		c.linesMu.Lock()
 		c.lines = append(c.lines[:0], lines...)
 		c.linesMu.Unlock()
 		return lines, err
-	}
-	if !isAPIErrorCode(err, 20001) {
-		return nil, err
-	}
-	if err := c.reauthenticate(); err != nil {
-		return nil, err
-	}
-	lines, err = c.api.getLines()
-	if err == nil {
-		c.linesMu.Lock()
-		c.lines = append(c.lines[:0], lines...)
-		c.linesMu.Unlock()
 	}
 	return lines, err
 }
@@ -399,12 +397,15 @@ func (c *controller) connect(wantID int) error {
 		AvailableProto: []string{"SS", "Trojan", "GTS"},
 		RegionID:       regionID,
 	}
-	resp, err := c.api.connect(ln.ID, req)
-	if isAPIErrorCode(err, 20001) {
+	var resp *connectResponse
+	for cycle := 0; cycle < 3; cycle++ {
+		resp, err = c.api.connect(ln.ID, req)
+		if err == nil || !isAPIErrorCode(err, 20001) {
+			break
+		}
 		if authErr := c.reauthenticate(); authErr != nil {
 			return authErr
 		}
-		resp, err = c.api.connect(ln.ID, req)
 	}
 	if err != nil {
 		return err

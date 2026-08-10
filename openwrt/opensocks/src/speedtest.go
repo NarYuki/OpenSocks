@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,13 +25,16 @@ const ooklaServersURL = "https://www.speedtest.net/api/js/servers?engine=js&sear
 const speedTestCNNodesURL = "https://nodes-api.speedtest.cn?type=multi&https=1&browser=1&domainType=2&use_cdn=1"
 
 type speedServer struct {
-	URL     string `json:"url"`
-	Name    string `json:"name"`
-	Country string `json:"country"`
-	CC      string `json:"cc"`
-	Sponsor string `json:"sponsor"`
-	ID      string `json:"id"`
-	Host    string `json:"host"`
+	URL       string  `json:"url"`
+	Name      string  `json:"name"`
+	Country   string  `json:"country"`
+	CC        string  `json:"cc"`
+	Sponsor   string  `json:"sponsor"`
+	ID        string  `json:"id"`
+	Host      string  `json:"host"`
+	Latitude  float64 `json:"lat,string,omitempty"`
+	Longitude float64 `json:"lon,string,omitempty"`
+	PingMS    float64 `json:"ping_ms,omitempty"`
 }
 type speedResult struct {
 	Server            speedServer `json:"server"`
@@ -44,15 +48,47 @@ type speedResult struct {
 }
 
 type speedTestCNServer struct {
-	ID          string `json:"id"`
-	Host        string `json:"host"`
-	Province    string `json:"province"`
-	City        string `json:"city"`
-	Operator    string `json:"operator"`
-	Sponsor     string `json:"sponsor"`
-	PingURL     string `json:"pingUrl"`
-	DownloadURL string `json:"downloadUrl"`
-	UploadURL   string `json:"uploadUrl"`
+	ID          string  `json:"id"`
+	Host        string  `json:"host"`
+	Province    string  `json:"province"`
+	City        string  `json:"city"`
+	Operator    string  `json:"operator"`
+	Sponsor     string  `json:"sponsor"`
+	PingURL     string  `json:"pingUrl"`
+	DownloadURL string  `json:"downloadUrl"`
+	UploadURL   string  `json:"uploadUrl"`
+	Latitude    float64 `json:"latitude,omitempty"`
+	Longitude   float64 `json:"longitude,omitempty"`
+	PingMS      float64 `json:"ping_ms,omitempty"`
+}
+
+func measureSpeedServerPings[T *speedServer | *speedTestCNServer](servers []T, hostOf func(T) string, setPing func(T, float64)) {
+	jobs := make(chan T)
+	var wg sync.WaitGroup
+	for worker := 0; worker < 6; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for server := range jobs {
+				host, portText, err := net.SplitHostPort(hostOf(server))
+				if err != nil {
+					continue
+				}
+				port, err := strconv.Atoi(portText)
+				if err != nil {
+					continue
+				}
+				if result := pingTarget(host, port); result.Reachable {
+					setPing(server, result.Milliseconds)
+				}
+			}
+		}()
+	}
+	for i := range servers {
+		jobs <- servers[i]
+	}
+	close(jobs)
+	wg.Wait()
 }
 
 type speedTestCNResult struct {

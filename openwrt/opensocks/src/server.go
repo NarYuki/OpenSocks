@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 )
 
@@ -99,6 +100,14 @@ func (s *server) handleSpeedTestCNServers(w http.ResponseWriter, r *http.Request
 		writeError(w, err)
 		return
 	}
+	pointers := make([]*speedTestCNServer, len(servers))
+	for i := range servers {
+		pointers[i] = &servers[i]
+	}
+	measureSpeedServerPings(pointers, func(server *speedTestCNServer) string { return server.Host }, func(server *speedTestCNServer, ping float64) { server.PingMS = ping })
+	sort.SliceStable(servers, func(i, j int) bool {
+		return servers[i].PingMS > 0 && (servers[j].PingMS == 0 || servers[i].PingMS < servers[j].PingMS)
+	})
 	writeJSON(w, map[string]any{"servers": servers})
 }
 
@@ -138,6 +147,14 @@ func (s *server) handleSpeedServers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	pointers := make([]*speedServer, len(servers))
+	for i := range servers {
+		pointers[i] = &servers[i]
+	}
+	measureSpeedServerPings(pointers, func(server *speedServer) string { return server.Host }, func(server *speedServer, ping float64) { server.PingMS = ping })
+	sort.SliceStable(servers, func(i, j int) bool {
+		return servers[i].PingMS > 0 && (servers[j].PingMS == 0 || servers[i].PingMS < servers[j].PingMS)
+	})
 	writeJSON(w, map[string]any{"servers": servers})
 }
 func (s *server) handleSpeedRun(w http.ResponseWriter, r *http.Request) {
