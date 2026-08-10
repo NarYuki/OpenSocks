@@ -3,7 +3,7 @@ set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
 VERSION="${VERSION:-0.2.0}"
-RELEASE="${RELEASE:-3}"
+RELEASE="${RELEASE:-4}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
@@ -17,6 +17,10 @@ build_ipk() {
 	control_dir="$3"
 	data_dir="$4"
 	package="$OUT/${name}_${VERSION}-${RELEASE}_${arch}.ipk"
+	find "$data_dir" -type d -exec chmod 0755 {} +
+	if [ -d "$data_dir/etc/opensocks" ]; then
+		chmod 0700 "$data_dir/etc/opensocks"
+	fi
 	( cd "$control_dir" && tar --owner=0 --group=0 -czf "$WORK/control.tar.gz" . )
 	( cd "$data_dir" && tar --owner=0 --group=0 -czf "$WORK/data.tar.gz" . )
 	printf '2.0\n' > "$WORK/debian-binary"
@@ -42,6 +46,7 @@ printf '/etc/config/opensocks\n' > "$daemon_control/conffiles"
 cat > "$daemon_control/postinst" <<'EOF'
 #!/bin/sh
 [ -n "$IPKG_INSTROOT" ] || /etc/init.d/opensocks enable
+[ -n "$IPKG_INSTROOT" ] || /etc/init.d/opensocks start || true
 exit 0
 EOF
 cat > "$daemon_control/prerm" <<'EOF'
@@ -84,6 +89,7 @@ uci set opensocks.settings.binary_url='$binary_url'
 uci set opensocks.settings.binary_sha256='$binary_sha'
 uci commit opensocks
 /etc/init.d/opensocks enable
+/etc/init.d/opensocks start || true
 exit 0
 EOF
 cp "$ROOT/openwrt/opensocks-minimal/files/etc/init.d/opensocks" "$minimal_data/etc/init.d/opensocks"
