@@ -45,6 +45,11 @@ class OpenSocksApp extends StatelessWidget {
           side: const BorderSide(color: Color(0xffcedbd6)),
         ),
       ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: false,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
