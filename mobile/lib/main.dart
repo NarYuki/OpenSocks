@@ -26,19 +26,34 @@ class OpenSocksApp extends StatelessWidget {
     ],
     supportedLocales: const [Locale('ja'), Locale('en'), Locale('zh', 'CN')],
     materialLightTheme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff087f5b)),
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xff006c51),
+        brightness: Brightness.light,
+        surface: const Color(0xfff6faf8),
+      ),
+      scaffoldBackgroundColor: const Color(0xffeef5f2),
       cardTheme: CardThemeData(
+        color: Colors.white,
         elevation: 0,
         margin: const EdgeInsets.symmetric(vertical: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: Color(0xffcedbd6)),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
+        fillColor: Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: Color(0xffb8c9c2)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xffb8c9c2)),
         ),
       ),
+      dividerColor: const Color(0xffccd9d4),
       useMaterial3: true,
     ),
     materialDarkTheme: ThemeData(
@@ -262,7 +277,8 @@ class _HomePageState extends State<HomePage> {
       useNativeBottomBar: true,
       selectedIndex: index,
       onTap: (v) => setState(() => index = v),
-      selectedItemColor: const Color(0xff31d6a5),
+      selectedItemColor: Theme.of(c).colorScheme.primary,
+      bottomNavigationBar: _androidNavigation(c),
       items: const [
         AdaptiveNavigationDestination(
           icon: 'house',
@@ -287,6 +303,59 @@ class _HomePageState extends State<HomePage> {
       ],
     ),
   );
+
+  Widget _androidNavigation(BuildContext c) {
+    final colors = Theme.of(c).colorScheme;
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: colors.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: colors.shadow.withValues(alpha: .18),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(27),
+          child: NavigationBar(
+            height: 70,
+            backgroundColor: colors.surface,
+            indicatorColor: colors.primaryContainer,
+            selectedIndex: index,
+            onDestinationSelected: (v) => setState(() => index = v),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.power_settings_new_outlined),
+                selectedIcon: Icon(Icons.power_settings_new_rounded),
+                label: '接続',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.bar_chart_outlined),
+                selectedIcon: Icon(Icons.bar_chart_rounded),
+                label: '通信',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.speed_outlined),
+                selectedIcon: Icon(Icons.speed_rounded),
+                label: 'テスト',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: 'アカウント',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 String bytes(num n) {
@@ -363,8 +432,9 @@ class _OverviewPageState extends State<OverviewPage> {
 
   Future<void> action(String p, [Map<String, dynamic>? b]) async {
     final connecting = p == 'connect';
+    final switching = connecting && s?['running'] == true;
     final stages = connecting
-        ? ['認証中', '接続中', 'ネットワーク構成中', 'インターフェース処理中']
+        ? ['認証中', switching ? '切替中' : '接続中', 'ネットワーク構成中', 'インターフェース処理中']
         : ['切断処理中', 'インターフェース処理中'];
     var stage = 0;
     setState(() {
@@ -399,17 +469,22 @@ class _OverviewPageState extends State<OverviewPage> {
   }
 
   Future<void> chooseServer() async {
-    await showModalBottomSheet<void>(
+    final selected = await showModalBottomSheet<int>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => FractionallySizedBox(
+      builder: (sheetContext) => FractionallySizedBox(
         heightFactor: .94,
-        child: LinesPage(api: widget.api),
+        child: LinesPage(
+          api: widget.api,
+          onSelect: (id) => Navigator.pop(sheetContext, id),
+        ),
       ),
     );
-    await refresh();
+    if (selected != null && mounted) {
+      await action('connect', {'line_id': selected});
+    }
   }
 
   @override
@@ -427,7 +502,7 @@ class _OverviewPageState extends State<OverviewPage> {
               decoration: BoxDecoration(
                 color:
                     (x['running'] == true
-                            ? const Color(0xff31d6a5)
+                            ? Theme.of(c).colorScheme.primary
                             : Theme.of(c).colorScheme.onSurfaceVariant)
                         .withValues(alpha: .12),
                 borderRadius: BorderRadius.circular(30),
@@ -441,7 +516,7 @@ class _OverviewPageState extends State<OverviewPage> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: x['running'] == true
-                          ? const Color(0xff31d6a5)
+                          ? Theme.of(c).colorScheme.primary
                           : Theme.of(c).colorScheme.onSurfaceVariant,
                     ),
                   ),
@@ -474,8 +549,8 @@ class _OverviewPageState extends State<OverviewPage> {
                   gradient: RadialGradient(
                     colors: x['running'] == true
                         ? [
-                            const Color(0xff31d6a5).withValues(alpha: .28),
-                            const Color(0xff10231d),
+                            Theme.of(c).colorScheme.primaryContainer,
+                            Theme.of(c).colorScheme.surface,
                           ]
                         : [
                             Theme.of(c).colorScheme.surfaceContainerHighest,
@@ -484,7 +559,7 @@ class _OverviewPageState extends State<OverviewPage> {
                   ),
                   border: Border.all(
                     color: x['running'] == true
-                        ? Colors.greenAccent
+                        ? Theme.of(c).colorScheme.primary
                         : Theme.of(c).colorScheme.outline,
                     width: 3,
                   ),
@@ -492,8 +567,8 @@ class _OverviewPageState extends State<OverviewPage> {
                     BoxShadow(
                       color:
                           (x['running'] == true
-                                  ? Colors.greenAccent
-                                  : Colors.black)
+                                  ? Theme.of(c).colorScheme.primary
+                                  : Theme.of(c).colorScheme.shadow)
                               .withValues(alpha: .22),
                       blurRadius: 42,
                       spreadRadius: 6,
@@ -509,7 +584,7 @@ class _OverviewPageState extends State<OverviewPage> {
                         Icons.power_settings_new,
                         size: 88,
                         color: x['running'] == true
-                            ? Colors.greenAccent
+                            ? Theme.of(c).colorScheme.primary
                             : Theme.of(c).colorScheme.onSurfaceVariant,
                       ),
               ),
@@ -566,8 +641,8 @@ class _OverviewPageState extends State<OverviewPage> {
                           style: TextStyle(
                             fontSize: 12,
                             color: x['routingApplied'] == true
-                                ? const Color(0xff31d6a5)
-                                : Colors.orangeAccent,
+                                ? Theme.of(c).colorScheme.primary
+                                : Theme.of(c).colorScheme.tertiary,
                           ),
                         ),
                       ],
@@ -578,8 +653,8 @@ class _OverviewPageState extends State<OverviewPage> {
                         ? Icons.check_circle
                         : Icons.sync,
                     color: x['routingApplied'] == true
-                        ? const Color(0xff31d6a5)
-                        : Colors.orangeAccent,
+                        ? Theme.of(c).colorScheme.primary
+                        : Theme.of(c).colorScheme.tertiary,
                   ),
                 ],
               ),
@@ -630,7 +705,13 @@ Widget _metric(String a, String b, IconData i) => Column(
   children: [
     Icon(i),
     const SizedBox(height: 5),
-    Text(b, style: const TextStyle(fontWeight: FontWeight.bold)),
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(b, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    ),
     Text(a, style: const TextStyle(fontSize: 12)),
   ],
 );
@@ -653,8 +734,9 @@ class AccountCard extends StatelessWidget {
 }
 
 class LinesPage extends StatefulWidget {
-  const LinesPage({super.key, required this.api});
+  const LinesPage({super.key, required this.api, this.onSelect});
   final OpenSocksApi api;
+  final ValueChanged<int>? onSelect;
   @override
   State<LinesPage> createState() => _LinesPageState();
 }
@@ -783,27 +865,13 @@ class _LinesPageState extends State<LinesPage> {
                   children: [
                     Row(
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '低遅延サーバー',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                'Pingの良好な順に自動表示',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(
-                                    c,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
+                        const Expanded(
+                          child: Text(
+                            'サーバー一覧',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                         IconButton(
@@ -841,12 +909,14 @@ class _LinesPageState extends State<LinesPage> {
                       final pingColor = latency == null
                           ? Theme.of(c).colorScheme.outline
                           : latency < 100
-                          ? const Color(0xff31d6a5)
+                          ? Theme.of(c).colorScheme.primary
                           : latency < 220
-                          ? Colors.amberAccent
-                          : Colors.redAccent;
+                          ? Theme.of(c).colorScheme.tertiary
+                          : Theme.of(c).colorScheme.error;
                       return Card(
-                        color: selected ? const Color(0xff153229) : null,
+                        color: selected
+                            ? Theme.of(c).colorScheme.primaryContainer
+                            : null,
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 6,
@@ -878,10 +948,10 @@ class _LinesPageState extends State<LinesPage> {
                                   ),
                                 ),
                                 if (selected)
-                                  const Icon(
+                                  Icon(
                                     Icons.check_circle,
                                     size: 18,
-                                    color: Color(0xff31d6a5),
+                                    color: Theme.of(c).colorScheme.primary,
                                   ),
                               ],
                             ),
@@ -935,7 +1005,14 @@ class _LinesPageState extends State<LinesPage> {
                             ),
                             onTap: switchingID != null || selected
                                 ? null
-                                : () => connect(l['id']),
+                                : () {
+                                    final id = l['id'] as int;
+                                    if (widget.onSelect != null) {
+                                      widget.onSelect!(id);
+                                    } else {
+                                      connect(id);
+                                    }
+                                  },
                           ),
                         ),
                       );
@@ -1187,31 +1264,6 @@ class _TestsPageState extends State<TestsPage> {
         ),
       ),
       _liveGauge(c),
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('測定サーバー', style: Theme.of(c).textTheme.titleMedium),
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: busy ? null : chooseSpeedServer,
-                icon: const Icon(Icons.travel_explore_rounded),
-                label: Text(_selectedServerLabel()),
-              ),
-              const SizedBox(height: 8),
-              FilledButton.icon(
-                onPressed: busy || (ooklaID == null && cnID == null)
-                    ? null
-                    : () => run(cnID != null ? 'cn' : 'ookla'),
-                icon: const Icon(Icons.speed_rounded),
-                label: const Text('測定開始'),
-              ),
-            ],
-          ),
-        ),
-      ),
     ],
   );
 
@@ -1227,85 +1279,97 @@ class _TestsPageState extends State<TestsPage> {
         child: Column(
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _metric(
-                  'PING',
-                  '${((p['ping_ms'] as num?) ?? 0).toStringAsFixed(1)} ms',
-                  Icons.network_ping,
+                Expanded(
+                  child: _metric(
+                    'PING',
+                    '${((p['ping_ms'] as num?) ?? 0).toStringAsFixed(1)} ms',
+                    Icons.network_ping,
+                  ),
                 ),
-                _metric(
-                  'DOWNLOAD',
-                  '${((p['download_mbps'] as num?) ?? 0).toStringAsFixed(1)} Mbps',
-                  Icons.download,
+                Expanded(
+                  child: _metric(
+                    'DOWNLOAD',
+                    '${((p['download_mbps'] as num?) ?? 0).toStringAsFixed(1)} Mbps',
+                    Icons.download,
+                  ),
                 ),
-                _metric(
-                  'UPLOAD',
-                  '${((p['upload_mbps'] as num?) ?? 0).toStringAsFixed(1)} Mbps',
-                  Icons.upload,
+                Expanded(
+                  child: _metric(
+                    'UPLOAD',
+                    '${((p['upload_mbps'] as num?) ?? 0).toStringAsFixed(1)} Mbps',
+                    Icons.upload,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            GestureDetector(
-              onTap: busy
-                  ? null
-                  : () {
-                      if (ooklaID == null && cnID == null) {
-                        chooseSpeedServer();
-                      } else {
-                        run(cnID != null ? 'cn' : 'ookla');
-                      }
-                    },
-              child: SizedBox(
-                width: 310,
-                height: 310,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    CustomPaint(
-                      size: const Size.square(310),
-                      painter: SpeedGaugePainter(
-                        value: current,
-                        active: running,
-                        color: Theme.of(c).colorScheme.primary,
-                        track: Theme.of(c).colorScheme.surfaceContainerHighest,
-                        textColor: Theme.of(c).colorScheme.onSurface,
-                      ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final gaugeSize = math.min(290.0, constraints.maxWidth);
+                return GestureDetector(
+                  onTap: busy
+                      ? null
+                      : () {
+                          if (ooklaID == null && cnID == null) {
+                            chooseSpeedServer();
+                          } else {
+                            run(cnID != null ? 'cn' : 'ookla');
+                          }
+                        },
+                  child: SizedBox(
+                    width: gaugeSize,
+                    height: gaugeSize,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CustomPaint(
+                          size: Size.square(gaugeSize),
+                          painter: SpeedGaugePainter(
+                            value: current,
+                            active: running,
+                            color: Theme.of(c).colorScheme.primary,
+                            track: Theme.of(
+                              c,
+                            ).colorScheme.surfaceContainerHighest,
+                            textColor: Theme.of(c).colorScheme.onSurface,
+                          ),
+                        ),
+                        Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: running
+                              ? [
+                                  Text(
+                                    current.toStringAsFixed(2),
+                                    style: Theme.of(c).textTheme.displaySmall
+                                        ?.copyWith(fontWeight: FontWeight.w300),
+                                  ),
+                                  Text(
+                                    'Mbps  ·  ${stage.toString().toUpperCase()}',
+                                    style: TextStyle(
+                                      color: Theme.of(c).colorScheme.primary,
+                                    ),
+                                  ),
+                                ]
+                              : [
+                                  Text(
+                                    'GO',
+                                    style: Theme.of(c).textTheme.displayLarge
+                                        ?.copyWith(fontWeight: FontWeight.w300),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    ooklaID == null && cnID == null
+                                        ? 'サーバーを選択'
+                                        : 'タップして測定',
+                                  ),
+                                ],
+                        ),
+                      ],
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: running
-                          ? [
-                              Text(
-                                current.toStringAsFixed(2),
-                                style: Theme.of(c).textTheme.displayMedium
-                                    ?.copyWith(fontWeight: FontWeight.w300),
-                              ),
-                              Text(
-                                'Mbps  ·  ${stage.toString().toUpperCase()}',
-                                style: TextStyle(
-                                  color: Theme.of(c).colorScheme.primary,
-                                ),
-                              ),
-                            ]
-                          : [
-                              Text(
-                                'GO',
-                                style: Theme.of(c).textTheme.displayLarge
-                                    ?.copyWith(fontWeight: FontWeight.w300),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                ooklaID == null && cnID == null
-                                    ? 'サーバーを選択'
-                                    : 'タップして測定',
-                              ),
-                            ],
-                    ),
-                  ],
-                ),
-              ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 6),
             ListTile(
@@ -1324,6 +1388,7 @@ class _TestsPageState extends State<TestsPage> {
                 onPressed: busy ? null : chooseSpeedServer,
                 child: const Text('サーバー変更'),
               ),
+              onTap: busy ? null : chooseSpeedServer,
             ),
           ],
         ),
@@ -1347,16 +1412,7 @@ class _TestsPageState extends State<TestsPage> {
   }
 
   Future<void> chooseSpeedServer() async {
-    if (region == null) {
-      await regionTest();
-    }
-    if (ookla.isEmpty || cn.isEmpty) {
-      await Future.wait([
-        if (ookla.isEmpty) servers('ookla'),
-        if (cn.isEmpty) servers('cn'),
-      ]);
-    }
-    if (!mounted) return;
+    final loading = _loadSpeedServerPicker();
     final search = TextEditingController();
     await showModalBottomSheet<void>(
       context: context,
@@ -1366,42 +1422,76 @@ class _TestsPageState extends State<TestsPage> {
       builder: (sheetContext) => FractionallySizedBox(
         heightFactor: .94,
         child: StatefulBuilder(
-          builder: (context, modalSetState) => DefaultTabController(
-            length: 2,
-            child: Column(
-              children: [
-                const TabBar(
-                  tabs: [
-                    Tab(text: 'speedtest.cn'),
-                    Tab(text: 'Ookla'),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: TextField(
-                    controller: search,
-                    onChanged: (_) => modalSetState(() {}),
-                    decoration: const InputDecoration(
-                      hintText: '測定ノード名・地域・事業者を検索',
-                      prefixIcon: Icon(Icons.search_rounded),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      _speedServerList(context, cn, 'cn', search.text),
-                      _speedServerList(context, ookla, 'ookla', search.text),
+          builder: (context, modalSetState) => FutureBuilder<void>(
+            future: loading,
+            builder: (context, snapshot) => DefaultTabController(
+              length: 2,
+              child: Column(
+                children: [
+                  const TabBar(
+                    tabs: [
+                      Tab(text: 'speedtest.cn'),
+                      Tab(text: 'Ookla'),
                     ],
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextField(
+                      controller: search,
+                      onChanged: (_) => modalSetState(() {}),
+                      decoration: const InputDecoration(
+                        hintText: '測定ノード名・地域・事業者を検索',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
+                    ),
+                  ),
+                  if (snapshot.connectionState != ConnectionState.done)
+                    const LinearProgressIndicator(),
+                  if (snapshot.hasError)
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Text(
+                        'サーバー取得エラー: ${snapshot.error}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _speedServerList(context, cn, 'cn', search.text),
+                        _speedServerList(context, ookla, 'ookla', search.text),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
     search.dispose();
+  }
+
+  Future<void> _loadSpeedServerPicker() async {
+    Map<String, dynamic>? newRegion = region;
+    if (newRegion == null) {
+      try {
+        newRegion = await widget.api.get('regiontest', timeout: 45);
+      } catch (_) {}
+    }
+    final results = await Future.wait([
+      widget.api.get('speedtestcn/servers', timeout: 60),
+      widget.api.get('speedtest/servers', timeout: 60),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      region = newRegion;
+      cn = results[0]['servers'] ?? [];
+      ookla = results[1]['servers'] ?? [];
+    });
   }
 
   Widget _speedServerList(
