@@ -133,3 +133,23 @@ msgid "Always route IPv4 CIDRs"
 msgstr "始终代理的IPv4 CIDR"
 msgid "Never route IPv4 CIDRs"
 msgstr "始终直连的IPv4 CIDR"
+msgid "Mobile app"
+msgstr "手机应用"
+
+msgid "Mobile app pairing"
+msgstr "手机应用配对"
+
+msgid "The mobile API uses a separate port and a 256-bit authentication token. For access outside your home, connect to the router through an encrypted VPN first."
+msgstr "手机 API 使用独立端口和 256 位认证令牌。外网访问时，请先通过加密 VPN 连接到路由器。"
+
+msgid "Router URL"
+msgstr "路由器 URL"
+
+msgid "Pairing token"
+msgstr "配对令牌"
+
+msgid "Show pairing information"
+msgstr "显示配对信息"
+
+msgid "Show token"
+msgstr "显示令牌"

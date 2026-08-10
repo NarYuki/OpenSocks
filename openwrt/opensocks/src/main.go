@@ -41,6 +41,19 @@ func runDaemon() {
 	// auto-connect to a free line on boot
 	go ctl.autoConnect()
 	go ctl.autoRouteWatchdog()
+	if cfg.MobileEnabled {
+		token, err := loadOrCreateMobileToken()
+		if err != nil {
+			logf("mobile API disabled: %v", err)
+		} else {
+			go func() {
+				logf("mobile api on 0.0.0.0:%d (token authentication enabled)", cfg.MobilePort)
+				if err := newServer(ctl).listenAndServeMobile(cfg.MobilePort, token); err != nil {
+					logf("mobile api stopped: %v", err)
+				}
+			}()
+		}
+	}
 	go func() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()

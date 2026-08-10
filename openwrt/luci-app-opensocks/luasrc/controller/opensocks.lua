@@ -24,6 +24,7 @@ function index()
     entry({"admin", "services", "opensocks", "speed_run"}, call("action_speed_run")).leaf = true
     entry({"admin", "services", "opensocks", "speedcn_servers"}, call("action_speedcn_servers")).leaf = true
     entry({"admin", "services", "opensocks", "speedcn_run"}, call("action_speedcn_run")).leaf = true
+    entry({"admin", "services", "opensocks", "mobile_pairing"}, call("action_mobile_pairing")).leaf = true
 end
 
 local function daemon_base()
@@ -74,6 +75,10 @@ local function require_json_body()
         return nil
     end
     return parsed
+end
+
+function action_mobile_pairing()
+    write_json(daemon_request("GET", "/mobile/pairing", nil))
 end
 
 function action_setup()

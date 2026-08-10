@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -20,6 +21,10 @@ func newServer(ctl *controller) *server {
 }
 
 func (s *server) listenAndServe(port int) error {
+	return http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), s.routes())
+}
+
+func (s *server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/status", s.handleStatus)
 	mux.HandleFunc("/register", s.handleRegister)
@@ -39,9 +44,44 @@ func (s *server) listenAndServe(port int) error {
 	mux.HandleFunc("/speedtest/run", s.handleSpeedRun)
 	mux.HandleFunc("/speedtestcn/servers", s.handleSpeedTestCNServers)
 	mux.HandleFunc("/speedtestcn/run", s.handleSpeedTestCNRun)
+	mux.HandleFunc("/speedtest/job/start", s.handleSpeedJobStart)
+	mux.HandleFunc("/speedtest/job/status", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, currentSpeedJob()) })
+	mux.HandleFunc("/mobile/pairing", s.handleMobilePairing)
+	return mux
+}
 
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	return http.ListenAndServe(addr, mux)
+func (s *server) handleSpeedJobStart(w http.ResponseWriter, r *http.Request) {
+	if !requirePost(w, r) {
+		return
+	}
+	var in struct {
+		Provider string `json:"provider"`
+		ID       string `json:"id"`
+	}
+	if decodeJSONBody(r.Body, &in) != nil || (in.Provider != "ookla" && in.Provider != "speedtestcn") || in.ID == "" {
+		writeError(w, fmt.Errorf("invalid speed test job"))
+		return
+	}
+	if err := startSpeedJob(in.Provider, in.ID); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, currentSpeedJob())
+}
+
+func (s *server) listenAndServeMobile(port int, token string) error {
+	routes := s.routes()
+	return http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		provided := r.Header.Get("Authorization")
+		want := "Bearer " + token
+		if len(provided) != len(want) || subtle.ConstantTimeCompare([]byte(provided), []byte(want)) != 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": "unauthorized"})
+			return
+		}
+		routes.ServeHTTP(w, r)
+	}))
 }
 
 func (s *server) handleRegionTest(w http.ResponseWriter, r *http.Request) {

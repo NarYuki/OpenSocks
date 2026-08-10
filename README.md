@@ -4,6 +4,10 @@ OpenSocks is a low-memory OpenWrt client and LuCI dashboard for China-route
 proxy connections. It uses `shadowsocks-libev` and nftables instead of a large
 all-in-one proxy core, making it suitable for memory-constrained routers.
 
+The Flutter Android/iOS controller is available in [`mobile/`](mobile/). It
+provides the same router controls through a token-authenticated mobile API,
+with a VPN-style power button and a 100 ms live speed-test display.
+
 ## Features
 
 - Smart China routing and an all-TCP China proxy mode

@@ -27,21 +27,25 @@ type settings struct {
 	SelectedLineID int
 	APIDomain      string
 	ControlPort    int
+	MobileEnabled  bool
+	MobilePort     int
 	GeoIPURL       string
 	EngineBinary   string
 }
 
 func readSettings() *settings {
 	s := &settings{
-		Mode:         "smart",
-		Tun:          true,
-		FreeOnly:     true,
-		AutoConnect:  true,
-		AutoRoute:    true,
-		APIDomain:    "https://abscf2.fobwifi.com",
-		ControlPort:  9091,
-		GeoIPURL:     "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb",
-		EngineBinary: "/usr/bin/ss-redir",
+		Mode:          "smart",
+		Tun:           true,
+		FreeOnly:      true,
+		AutoConnect:   true,
+		AutoRoute:     true,
+		APIDomain:     "https://abscf2.fobwifi.com",
+		ControlPort:   9091,
+		MobileEnabled: true,
+		MobilePort:    9092,
+		GeoIPURL:      "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb",
+		EngineBinary:  "/usr/bin/ss-redir",
 	}
 	s.Token = loadSession()
 	// One-time migration from releases that stored the session in UCI.
@@ -75,6 +79,12 @@ func readSettings() *settings {
 	if v := uciGet("control_port"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			s.ControlPort = n
+		}
+	}
+	s.MobileEnabled = uciBool("mobile_enabled", s.MobileEnabled)
+	if v := uciGet("mobile_port"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < 65536 && n != s.ControlPort {
+			s.MobilePort = n
 		}
 	}
 	if v := uciGet("geoip_url"); v != "" {

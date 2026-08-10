@@ -209,6 +209,7 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 	}
 	defer func() { _ = cmd.Process.Kill(); _, _ = cmd.Process.Wait() }()
 	client := &http.Client{Transport: &http.Transport{DialContext: socksDial, DisableKeepAlives: true, DisableCompression: true}, Timeout: 12 * time.Second}
+	setSpeedStage("ping")
 	var ping float64
 	for i := 0; i < 3; i++ {
 		st := time.Now()
@@ -219,8 +220,10 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 		io.Copy(io.Discard, io.LimitReader(r.Body, 4096))
 		r.Body.Close()
 		ping += float64(time.Since(st).Microseconds()) / 1000
+		setSpeedPing(ping / float64(i+1))
 	}
 	ping /= 3
+	setSpeedStage("download")
 	st := time.Now()
 	downloadDeadline := st.Add(8 * time.Second)
 	var downloaded int64
@@ -232,7 +235,7 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 		r, e := client.Do(req)
 		if r != nil {
 			lastStatus = r.StatusCode
-			n, _ := io.CopyBuffer(io.Discard, r.Body, buffer)
+			n, _ := io.CopyBuffer(speedProgressWriter{}, r.Body, buffer)
 			downloaded += n
 			r.Body.Close()
 		}
@@ -245,6 +248,7 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 	if downloaded == 0 {
 		return nil, fmt.Errorf("SpeedTest.cn download returned HTTP %d with no data", lastStatus)
 	}
+	setSpeedStage("upload")
 	st = time.Now()
 	deadline := st.Add(5 * time.Second)
 	var uploaded int64
@@ -348,6 +352,7 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 	tr := &http.Transport{DialContext: socksDial, DisableKeepAlives: true}
 	client := &http.Client{Transport: tr, Timeout: 12 * time.Second}
 	base := strings.TrimSuffix(server.URL, "upload.php")
+	setSpeedStage("ping")
 	var ping float64
 	for i := 0; i < 3; i++ {
 		st := time.Now()
@@ -358,6 +363,7 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 		io.Copy(io.Discard, io.LimitReader(r.Body, 4096))
 		r.Body.Close()
 		ping += float64(time.Since(st).Microseconds()) / 1000
+		setSpeedPing(ping / float64(i+1))
 	}
 	ping /= 3
 	dctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
@@ -368,18 +374,20 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 		parsed.RawQuery = "size=25000000"
 		downloadURL = parsed.String()
 	}
+	setSpeedStage("download")
 	req, _ := http.NewRequestWithContext(dctx, "GET", downloadURL, nil)
 	st := time.Now()
 	r, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	downloaded, _ := io.CopyBuffer(io.Discard, r.Body, make([]byte, 32*1024))
+	downloaded, _ := io.CopyBuffer(speedProgressWriter{}, r.Body, make([]byte, 32*1024))
 	r.Body.Close()
 	dd := time.Since(st).Seconds()
 	if downloaded == 0 {
 		return nil, fmt.Errorf("Ookla download test returned HTTP %d with no data; choose another China server", r.StatusCode)
 	}
+	setSpeedStage("upload")
 	st = time.Now()
 	deadline := st.Add(5 * time.Second)
 	var uploaded int64
@@ -415,6 +423,7 @@ type countingReader struct {
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, e := c.R.Read(p)
 	c.N += int64(n)
+	addSpeedBytes(int64(n))
 	return n, e
 }
 
