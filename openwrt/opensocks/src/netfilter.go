@@ -34,23 +34,7 @@ func setupRedirect(mode, proxyServer string) error {
 		if err != nil {
 			return err
 		}
-		domainIPs = resolveProxyDomains(cfg)
-		for _, group := range chinaServiceGroups {
-			serviceIPs[group.Name] = resolveHosts(group.Domains)
-		}
-		// A shared CDN address must belong to only one service counter or the
-		// same bytes would be counted twice. Earlier, more specific groups win.
-		claimed := map[string]bool{}
-		for _, group := range chinaServiceGroups {
-			unique := serviceIPs[group.Name][:0]
-			for _, ip := range serviceIPs[group.Name] {
-				if !claimed[ip] {
-					claimed[ip] = true
-					unique = append(unique, ip)
-				}
-			}
-			serviceIPs[group.Name] = unique
-		}
+		domainIPs, serviceIPs = cachedRoutingIPs(cfg)
 	}
 
 	var script strings.Builder
@@ -233,6 +217,69 @@ func resolveHosts(hosts []string) []string {
 		out = append(out, ip)
 	}
 	sort.Strings(out)
+	return out
+}
+
+var routingIPCache struct {
+	sync.Mutex
+	at       time.Time
+	key      string
+	domains  []string
+	services map[string][]string
+}
+
+// cachedRoutingIPs keeps server switching cheap. Domain classification does
+// not depend on the selected proxy server, so resolving hundreds of service
+// hosts again on every switch only creates latency and memory pressure.
+func cachedRoutingIPs(cfg *settings) ([]string, map[string][]string) {
+	key := cfg.IncludeDomains + "\x00" + cfg.ExcludeDomains
+	routingIPCache.Lock()
+	defer routingIPCache.Unlock()
+	if routingIPCache.key == key && len(routingIPCache.domains) > 0 && time.Since(routingIPCache.at) < 10*time.Minute {
+		return append([]string(nil), routingIPCache.domains...), cloneServiceIPs(routingIPCache.services)
+	}
+
+	services := make(map[string][]string, len(chinaServiceGroups))
+	var domains []string
+	var serviceMu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(1 + len(chinaServiceGroups))
+	go func() { defer wg.Done(); domains = resolveProxyDomains(cfg) }()
+	for _, group := range chinaServiceGroups {
+		group := group
+		go func() {
+			defer wg.Done()
+			ips := resolveHosts(group.Domains)
+			serviceMu.Lock()
+			services[group.Name] = ips
+			serviceMu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	// Shared CDN addresses belong to the first, most specific service only.
+	claimed := map[string]bool{}
+	for _, group := range chinaServiceGroups {
+		unique := services[group.Name][:0]
+		for _, ip := range services[group.Name] {
+			if !claimed[ip] {
+				claimed[ip] = true
+				unique = append(unique, ip)
+			}
+		}
+		services[group.Name] = unique
+	}
+	routingIPCache.key, routingIPCache.at = key, time.Now()
+	routingIPCache.domains = append([]string(nil), domains...)
+	routingIPCache.services = cloneServiceIPs(services)
+	return domains, services
+}
+
+func cloneServiceIPs(source map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(source))
+	for name, ips := range source {
+		out[name] = append([]string(nil), ips...)
+	}
 	return out
 }
 

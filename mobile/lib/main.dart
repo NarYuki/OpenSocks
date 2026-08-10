@@ -178,9 +178,7 @@ class _HomePageState extends State<HomePage> {
     LinesPage(api: widget.api),
     TrafficPage(api: widget.api),
     TestsPage(api: widget.api),
-    SettingsPage(api: widget.api),
     AccountPage(api: widget.api),
-    LogsPage(api: widget.api),
   ];
   @override
   Widget build(BuildContext c) => Scaffold(
@@ -203,9 +201,7 @@ class _HomePageState extends State<HomePage> {
         NavigationDestination(icon: Icon(Icons.dns), label: '回線'),
         NavigationDestination(icon: Icon(Icons.query_stats), label: '通信'),
         NavigationDestination(icon: Icon(Icons.speed), label: 'テスト'),
-        NavigationDestination(icon: Icon(Icons.tune), label: '設定'),
         NavigationDestination(icon: Icon(Icons.person), label: 'アカウント'),
-        NavigationDestination(icon: Icon(Icons.article), label: 'ログ'),
       ],
     ),
   );

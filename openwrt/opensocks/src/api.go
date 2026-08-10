@@ -290,7 +290,7 @@ func (c *apiClient) do(method, path string, body any) ([]byte, error) {
 // session is propagating between the authentication and account services.
 // Other API and transport errors are returned immediately.
 func (c *apiClient) doAuthenticated(method, path string, body any) ([]byte, error) {
-	const attempts = 3
+	const attempts = 2
 	for attempt := 0; ; attempt++ {
 		raw, err := c.do(method, path, body)
 		if err == nil || !isAPIErrorCode(err, 20001) || attempt == attempts-1 {

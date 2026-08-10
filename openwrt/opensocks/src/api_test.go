@@ -11,7 +11,7 @@ import (
 func TestAuthenticatedRequestRetriesTransient20001(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if requests.Add(1) < 3 {
+		if requests.Add(1) < 2 {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"status":"fail","code":20001,"error":"auth service failed"}`))
 			return
@@ -27,11 +27,11 @@ func TestAuthenticatedRequestRetriesTransient20001(t *testing.T) {
 	if _, err := client.getLines(); err != nil {
 		t.Fatalf("getLines returned error after retry: %v", err)
 	}
-	if got := requests.Load(); got != 3 {
-		t.Fatalf("request count = %d, want 3", got)
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("request count = %d, want 2", got)
 	}
-	if len(delays) != 2 || delays[0] != time.Second || delays[1] != 2*time.Second {
-		t.Fatalf("retry delays = %v, want [1s 2s]", delays)
+	if len(delays) != 1 || delays[0] != time.Second {
+		t.Fatalf("retry delays = %v, want [1s]", delays)
 	}
 }
 
@@ -55,7 +55,7 @@ func TestAuthenticatedRequestDoesNotRetryOtherErrors(t *testing.T) {
 	}
 }
 
-func TestAuthenticatedRequestStopsAfterThreeAttempts(t *testing.T) {
+func TestAuthenticatedRequestStopsAfterTwoAttempts(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
@@ -70,7 +70,7 @@ func TestAuthenticatedRequestStopsAfterThreeAttempts(t *testing.T) {
 	if !isAPIErrorCode(err, 20001) {
 		t.Fatalf("getLines error = %v, want API code 20001", err)
 	}
-	if got := requests.Load(); got != 3 {
-		t.Fatalf("request count = %d, want 3", got)
+	if got := requests.Load(); got != 2 {
+		t.Fatalf("request count = %d, want 2", got)
 	}
 }

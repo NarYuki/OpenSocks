@@ -67,6 +67,8 @@ type controller struct {
 	cfg       *settings
 	authMu    sync.Mutex
 	connectMu sync.Mutex
+	linesMu   sync.RWMutex
+	lines     []line
 	lastAuth  time.Time
 }
 
@@ -186,10 +188,6 @@ func (c *controller) logout() {
 func (c *controller) reauthenticate() error {
 	c.authMu.Lock()
 	defer c.authMu.Unlock()
-	if !c.lastAuth.IsZero() && time.Since(c.lastAuth) < 15*time.Second {
-		time.Sleep(2 * time.Second)
-		return nil
-	}
 	creds, err := loadCredentials()
 	if err != nil {
 		return fmt.Errorf("session expired and no saved credentials are available: %w", err)
@@ -212,13 +210,31 @@ func (c *controller) reauthenticate() error {
 
 func (c *controller) getLinesAuthenticated() ([]line, error) {
 	lines, err := c.api.getLines()
-	if !isAPIErrorCode(err, 20001) {
+	if err == nil {
+		c.linesMu.Lock()
+		c.lines = append(c.lines[:0], lines...)
+		c.linesMu.Unlock()
 		return lines, err
+	}
+	if !isAPIErrorCode(err, 20001) {
+		return nil, err
 	}
 	if err := c.reauthenticate(); err != nil {
 		return nil, err
 	}
-	return c.api.getLines()
+	lines, err = c.api.getLines()
+	if err == nil {
+		c.linesMu.Lock()
+		c.lines = append(c.lines[:0], lines...)
+		c.linesMu.Unlock()
+	}
+	return lines, err
+}
+
+func (c *controller) cachedLines() []line {
+	c.linesMu.RLock()
+	defer c.linesMu.RUnlock()
+	return append([]line(nil), c.lines...)
 }
 
 // --- lines -----------------------------------------------------------------
@@ -238,7 +254,15 @@ type lineInfo struct {
 func (c *controller) listLines(sortBy string) ([]lineInfo, error) {
 	lines, err := c.getLinesAuthenticated()
 	if err != nil {
-		return nil, err
+		if isAPIErrorCode(err, 20001) {
+			lines = c.cachedLines()
+			if len(lines) == 0 {
+				return nil, fmt.Errorf("server list is temporarily unavailable; please retry")
+			}
+			logf("using cached server list while authentication service recovers")
+		} else {
+			return nil, err
+		}
 	}
 	out := make([]lineInfo, 0, len(lines))
 	vip := activeVIP(loadAccount())
@@ -313,21 +337,29 @@ func (c *controller) pickLine(lines []line, wantID int) (*line, error) {
 				return &lines[i], nil
 			}
 		}
-		return nil, fmt.Errorf("line %d not found", wantID)
+		// The upstream line directory can temporarily return a partial list while
+		// its authentication service is converging. A user-selected ID remains a
+		// valid connect target; let the connect endpoint make the authoritative
+		// decision instead of producing a false local "not found" error.
+		return &line{ID: wantID, Name: fmt.Sprintf("Line %d", wantID)}, nil
 	}
+	preferVIP := activeVIP(loadAccount())
 	for i := range lines {
-		if lines[i].IsFree {
+		if (preferVIP && !lines[i].IsFree) || (!preferVIP && lines[i].IsFree) {
 			return &lines[i], nil
 		}
 	}
-	return nil, fmt.Errorf("no free line available")
+	if len(lines) > 0 {
+		return &lines[0], nil
+	}
+	return nil, fmt.Errorf("no server is currently available")
 }
 
 func (c *controller) connect(wantID int) error {
 	c.connectMu.Lock()
 	defer c.connectMu.Unlock()
 	c.refreshSettings()
-	switching, oldLineID := false, 0
+	switching := false
 	manualSelection := wantID > 0
 	if wantID <= 0 && c.cfg.SelectedLineID > 0 {
 		wantID = c.cfg.SelectedLineID
@@ -337,15 +369,23 @@ func (c *controller) connect(wantID int) error {
 	}
 	if c.engine.isRunning() {
 		if wantID <= 0 || wantID == c.engine.lineID {
-			return fmt.Errorf("already connected to line %d", c.engine.lineID)
+			return nil
 		}
 		logf("switching server from line %d to line %d", c.engine.lineID, wantID)
-		switching, oldLineID = true, c.engine.lineID
+		switching = true
 	}
 
-	lines, err := c.getLinesAuthenticated()
-	if err != nil {
-		return err
+	var lines []line
+	var err error
+	if wantID > 0 {
+		// A selected line ID is authoritative. Avoid the less reliable directory
+		// request during switching; its metadata was cached when the picker loaded.
+		lines = c.cachedLines()
+	} else {
+		lines, err = c.getLinesAuthenticated()
+		if err != nil {
+			return err
+		}
 	}
 	ln, err := c.pickLine(lines, wantID)
 	if err != nil {
@@ -384,16 +424,11 @@ func (c *controller) connect(wantID int) error {
 		teardownRedirect()
 	}
 	if err := c.engine.start(resp, c.cfg.Mode, false, ""); err != nil {
-		c.api.disconnect(ln.ID)
 		return err
 	}
 	if err := setupRedirect(c.cfg.Mode, c.engine.server); err != nil {
 		c.engine.stop()
-		c.api.disconnect(ln.ID)
 		return err
-	}
-	if switching && oldLineID > 0 {
-		go func(id int) { _ = c.api.disconnect(id) }(oldLineID)
 	}
 	if err := appendHistory(connectedLine, resp); err != nil {
 		logf("warning: could not save connection history: %v", err)
@@ -410,28 +445,13 @@ func (c *controller) reconnect(historyID string) error {
 	if err != nil {
 		return err
 	}
-	if c.engine.isRunning() {
-		if err := c.disconnect(); err != nil {
-			return err
-		}
-	}
 	return c.connect(record.LineID)
 }
 
 func (c *controller) disconnect() error {
 	c.refreshSettings()
-	id := c.engine.lineID
 	c.engine.stop()
 	teardownRedirect()
-	if id > 0 {
-		if c.loggedIn() {
-			go func(lineID int) {
-				if err := c.api.disconnect(lineID); err != nil {
-					logf("background disconnect warning for line %d: %v", lineID, err)
-				}
-			}(id)
-		}
-	}
 	return nil
 }
 
