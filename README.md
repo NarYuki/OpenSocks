@@ -15,7 +15,7 @@ OpenSocks 是用于在 OpenWrt 上使用 Transocks（穿梭）中国回国线路
 - 中国服务分类流量统计、实时速率和累计流量
 - Ookla 中国节点与 SpeedTest.cn 测速
 - LuCI、Android 和 iOS 支持中文、英文、日文
-- 约 1.8KB 的 minimal IPK；程序下载到 `/tmp`，设置保留在 `/etc`
+- **低容量设备解决方案**：overlay 只安装约 1.8KB 的 minimal 启动器，程序自动下载并展开到临时内存 `/tmp`。重启后即使 `/tmp` 被清空，启动器也会自动重新下载、校验、展开并恢复连接；设置、加密登录信息、服务器选择和流量记录保留在 `/etc`，不会随重启消失
 
 ## 安装
 

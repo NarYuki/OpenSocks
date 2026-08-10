@@ -15,7 +15,7 @@ OpenSocks is an open-source OpenWrt client for the Transocks China return-route 
 - Per-service China traffic, live rates, and persistent totals
 - Ookla China and SpeedTest.cn testing
 - Chinese, English, and Japanese LuCI/mobile interfaces
-- Approximately 1.8KB minimal IPK; the binary runs from `/tmp` while settings remain under `/etc`
+- **Low-storage solution:** only an approximately 1.8KB minimal launcher is installed on the overlay; it automatically downloads and expands the daemon into temporary memory under `/tmp`. When a reboot clears `/tmp`, the launcher downloads, verifies, and expands it again and restores the connection. Settings, encrypted login data, server selection, and traffic records remain under `/etc` and survive reboots
 
 ## Installation
 
