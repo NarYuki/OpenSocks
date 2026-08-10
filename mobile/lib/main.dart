@@ -1474,6 +1474,14 @@ class _TrafficPageState extends State<TrafficPage> {
               (a.value['total_bytes'] ?? 0) as num,
             ),
           );
+    final theme = Theme.of(c);
+    final colors = theme.colorScheme;
+    final panelColor = theme.brightness == Brightness.dark
+        ? const Color(0xff151821)
+        : Colors.white;
+    final panelBorder = theme.brightness == Brightness.dark
+        ? const Color(0xff343946)
+        : const Color(0xffcedbd6);
     return ListView(
       padding: EdgeInsets.fromLTRB(12, pageTopPadding(c, 12), 12, 12),
       children: [
@@ -1484,14 +1492,21 @@ class _TrafficPageState extends State<TrafficPage> {
             onRetry: load,
             icon: Icons.bar_chart_rounded,
           ),
-        Card(
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: panelColor,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: panelBorder),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
               children: [
                 Text(
                   '↑ ${rate(d['up_bps'] ?? 0)}  /  ↓ ${rate(d['down_bps'] ?? 0)}',
-                  style: Theme.of(c).textTheme.titleLarge,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: colors.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -1500,23 +1515,116 @@ class _TrafficPageState extends State<TrafficPage> {
                     bytes(d['down_bytes'] ?? 0),
                     bytes(d['total_bytes'] ?? 0),
                   ),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
           ),
         ),
-        ListTile(title: Text(c.l10n.chinaServiceTraffic)),
-        for (final e in services)
-          Card(
-            child: ListTile(
-              title: Text(e.key.replaceAll('_', ' / ')),
-              subtitle: Text(
-                '↑ ${bytes(e.value['up_bytes'] ?? 0)}  ↓ ${bytes(e.value['down_bytes'] ?? 0)}',
-              ),
-              trailing: Text(bytes(e.value['total_bytes'] ?? 0)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 22, 8, 10),
+          child: Text(
+            c.l10n.chinaServiceTraffic,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: colors.onSurface,
+              fontWeight: FontWeight.w700,
             ),
           ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: panelColor,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: panelBorder),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(21),
+            child: Column(
+              children: [
+                for (var i = 0; i < services.length; i++) ...[
+                  _TrafficServiceRow(
+                    name: services[i].key.replaceAll('_', ' / '),
+                    up: bytes(services[i].value['up_bytes'] ?? 0),
+                    down: bytes(services[i].value['down_bytes'] ?? 0),
+                    total: bytes(services[i].value['total_bytes'] ?? 0),
+                  ),
+                  if (i != services.length - 1)
+                    Divider(height: 1, indent: 16, endIndent: 16),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
+    );
+  }
+}
+
+class _TrafficServiceRow extends StatelessWidget {
+  const _TrafficServiceRow({
+    required this.name,
+    required this.up,
+    required this.down,
+    required this.total,
+  });
+
+  final String name;
+  final String up;
+  final String down;
+  final String total;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return RepaintBoundary(
+      child: ColoredBox(
+        color: theme.brightness == Brightness.dark
+            ? const Color(0xff151821)
+            : Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: colors.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '↑ $up   ↓ $down',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                total,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: colors.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
