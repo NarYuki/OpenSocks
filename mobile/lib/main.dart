@@ -352,7 +352,11 @@ class _HomePageState extends State<HomePage> {
 
     return AdaptiveScaffold(
       appBar: adaptiveAppBar,
-      body: body,
+      // IOS26Scaffold publishes the status-bar + native toolbar height through
+      // MediaQuery. Consume only the top inset here so page content starts
+      // below the OpenSocks toolbar while still extending behind the floating
+      // Liquid Glass tab bar at the bottom.
+      body: SafeArea(top: true, bottom: false, child: body),
       // Native iOS platform views otherwise bleed through Flutter modal sheets.
       tabBarHidden: overlayVisible,
       // Keep the floating Liquid Glass bar stable. Auto-minimizing while an
