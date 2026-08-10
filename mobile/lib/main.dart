@@ -58,15 +58,19 @@ class OpenSocksApp extends StatelessWidget {
     ),
     materialDarkTheme: ThemeData(
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xff31d6a5),
+        seedColor: const Color(0xff22d3ee),
         brightness: Brightness.dark,
+        surface: const Color(0xff151821),
       ),
-      scaffoldBackgroundColor: const Color(0xff08110f),
+      scaffoldBackgroundColor: const Color(0xff090b10),
       cardTheme: CardThemeData(
-        color: const Color(0xff111d1a),
+        color: const Color(0xff151821),
         elevation: 0,
         margin: const EdgeInsets.symmetric(vertical: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: Color(0xff343946)),
+        ),
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -75,19 +79,24 @@ class OpenSocksApp extends StatelessWidget {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xff111d1a),
+        fillColor: const Color(0xff1b1f29),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: Color(0xff434957)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xff434957)),
         ),
       ),
+      dividerColor: const Color(0xff343946),
       useMaterial3: true,
     ),
     cupertinoDarkTheme: const CupertinoThemeData(
       brightness: Brightness.dark,
-      primaryColor: Color(0xff31d6a5),
-      scaffoldBackgroundColor: Color(0xff08110f),
-      barBackgroundColor: Color(0xcc111d1a),
+      primaryColor: Color(0xff22d3ee),
+      scaffoldBackgroundColor: Color(0xff090b10),
+      barBackgroundColor: Color(0xe6151821),
     ),
     cupertinoLightTheme: const CupertinoThemeData(
       brightness: Brightness.light,
@@ -1337,35 +1346,52 @@ class _TestsPageState extends State<TestsPage> {
                             textColor: Theme.of(c).colorScheme.onSurface,
                           ),
                         ),
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: running
-                              ? [
-                                  Text(
-                                    current.toStringAsFixed(2),
-                                    style: Theme.of(c).textTheme.displaySmall
-                                        ?.copyWith(fontWeight: FontWeight.w300),
-                                  ),
-                                  Text(
-                                    'Mbps  ·  ${stage.toString().toUpperCase()}',
-                                    style: TextStyle(
-                                      color: Theme.of(c).colorScheme.primary,
+                        Transform.translate(
+                          offset: Offset(0, running ? gaugeSize * .22 : 0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: running
+                                ? [
+                                    Text(
+                                      stage.toString().toUpperCase(),
+                                      style: TextStyle(
+                                        color: Theme.of(c).colorScheme.primary,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1.2,
+                                      ),
                                     ),
-                                  ),
-                                ]
-                              : [
-                                  Text(
-                                    'GO',
-                                    style: Theme.of(c).textTheme.displayLarge
-                                        ?.copyWith(fontWeight: FontWeight.w300),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    ooklaID == null && cnID == null
-                                        ? 'サーバーを選択'
-                                        : 'タップして測定',
-                                  ),
-                                ],
+                                    Text(
+                                      current.toStringAsFixed(2),
+                                      style: Theme.of(c).textTheme.displaySmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w300,
+                                          ),
+                                    ),
+                                    Text(
+                                      'Mbps',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          c,
+                                        ).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ]
+                                : [
+                                    Text(
+                                      'GO',
+                                      style: Theme.of(c).textTheme.displayLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w300,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      ooklaID == null && cnID == null
+                                          ? 'サーバーを選択'
+                                          : 'タップして測定',
+                                    ),
+                                  ],
+                          ),
                         ),
                       ],
                     ),
@@ -1639,16 +1665,34 @@ class SpeedGaugePainter extends CustomPainter {
 
     if (active) {
       final angle = start + sweep * normalized;
-      final needle = Paint()
-        ..color = textColor.withValues(alpha: .72)
-        ..strokeWidth = 8
-        ..strokeCap = StrokeCap.round;
-      canvas.drawLine(
-        center,
-        center + Offset(math.cos(angle), math.sin(angle)) * (radius - 34),
-        needle,
+      final direction = Offset(math.cos(angle), math.sin(angle));
+      final perpendicular = Offset(-direction.dy, direction.dx);
+      final tip = center + direction * (radius - 56);
+      final tail = center - direction * 13;
+      final needlePath = Path()
+        ..moveTo((tail + perpendicular * 10).dx, (tail + perpendicular * 10).dy)
+        ..lineTo(tip.dx, tip.dy)
+        ..lineTo((tail - perpendicular * 10).dx, (tail - perpendicular * 10).dy)
+        ..close();
+      final needleBounds = Rect.fromPoints(tail, tip).inflate(12);
+      canvas.drawShadow(needlePath, const Color(0xaa000000), 8, false);
+      canvas.drawPath(
+        needlePath,
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+            colors: [
+              textColor.withValues(alpha: .16),
+              textColor.withValues(alpha: .92),
+            ],
+          ).createShader(needleBounds),
       );
-      canvas.drawCircle(center, 9, Paint()..color = color);
+      canvas.drawCircle(
+        center,
+        8,
+        Paint()..color = textColor.withValues(alpha: .78),
+      );
     }
 
     const labels = ['0', '5', '10', '50', '100', '250', '500', '1000'];

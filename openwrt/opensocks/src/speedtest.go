@@ -11,13 +11,13 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -261,27 +261,12 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 	ping /= 3
 	setSpeedStage("download")
 	st := time.Now()
-	downloadDeadline := st.Add(8 * time.Second)
-	var downloaded int64
-	lastStatus := 0
-	buffer := make([]byte, 32*1024)
-	for time.Now().Before(downloadDeadline) && downloaded < 64<<20 {
-		dctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
-		req, _ := http.NewRequestWithContext(dctx, "GET", server.DownloadURL+"?size=25000000&r="+fmt.Sprint(time.Now().UnixNano()), nil)
-		r, e := client.Do(req)
-		if r != nil {
-			lastStatus = r.StatusCode
-			n, _ := io.CopyBuffer(speedProgressWriter{}, r.Body, buffer)
-			downloaded += n
-			r.Body.Close()
-		}
-		cancel()
-		if e != nil && downloaded == 0 {
-			return nil, e
-		}
-	}
+	downloaded, lastStatus, downloadErr := parallelDownload(client, server.DownloadURL+"?size=25000000", 8*time.Second, 96<<20)
 	dd := time.Since(st).Seconds()
 	if downloaded == 0 {
+		if downloadErr != nil {
+			return nil, downloadErr
+		}
 		return nil, fmt.Errorf("SpeedTest.cn download returned HTTP %d with no data", lastStatus)
 	}
 	setSpeedStage("upload")
@@ -402,26 +387,16 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 		setSpeedPing(ping / float64(i+1))
 	}
 	ping /= 3
-	dctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
 	downloadURL := base + "random4000x4000.jpg?x=" + fmt.Sprint(time.Now().UnixNano())
-	if parsed, e := url.Parse(server.URL); e == nil {
-		parsed.Path = "/download"
-		parsed.RawQuery = "size=25000000"
-		downloadURL = parsed.String()
-	}
 	setSpeedStage("download")
-	req, _ := http.NewRequestWithContext(dctx, "GET", downloadURL, nil)
 	st := time.Now()
-	r, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	downloaded, _ := io.CopyBuffer(speedProgressWriter{}, r.Body, make([]byte, 32*1024))
-	r.Body.Close()
+	downloaded, status, downloadErr := parallelDownload(client, downloadURL, 8*time.Second, 96<<20)
 	dd := time.Since(st).Seconds()
 	if downloaded == 0 {
-		return nil, fmt.Errorf("Ookla download test returned HTTP %d with no data; choose another China server", r.StatusCode)
+		if downloadErr != nil {
+			return nil, downloadErr
+		}
+		return nil, fmt.Errorf("Ookla download test returned HTTP %d with no data; choose another China server", status)
 	}
 	setSpeedStage("upload")
 	st = time.Now()
@@ -454,6 +429,49 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 type countingReader struct {
 	R io.Reader
 	N int64
+}
+
+// parallelDownload approximates the multi-connection behavior of desktop
+// speed-test clients without large buffers. Four 32 KiB buffers keep router
+// memory bounded while allowing high-latency China routes to fill the link.
+func parallelDownload(client *http.Client, rawURL string, duration time.Duration, limit int64) (int64, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+	var total, status atomic.Int64
+	var firstErr error
+	var errMu sync.Mutex
+	var wg sync.WaitGroup
+	separator := "?"
+	if strings.Contains(rawURL, "?") {
+		separator = "&"
+	}
+	for worker := 0; worker < 4; worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			buffer := make([]byte, 32*1024)
+			for ctx.Err() == nil && total.Load() < limit {
+				req, _ := http.NewRequestWithContext(ctx, "GET", rawURL+separator+"r="+fmt.Sprint(time.Now().UnixNano())+"&stream="+fmt.Sprint(worker), nil)
+				resp, err := client.Do(req)
+				if err != nil {
+					if ctx.Err() == nil {
+						errMu.Lock()
+						if firstErr == nil {
+							firstErr = err
+						}
+						errMu.Unlock()
+					}
+					return
+				}
+				status.Store(int64(resp.StatusCode))
+				n, _ := io.CopyBuffer(speedProgressWriter{}, resp.Body, buffer)
+				resp.Body.Close()
+				total.Add(n)
+			}
+		}(worker)
+	}
+	wg.Wait()
+	return total.Load(), int(status.Load()), firstErr
 }
 
 func (c *countingReader) Read(p []byte) (int, error) {
