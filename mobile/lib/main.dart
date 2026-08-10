@@ -439,6 +439,18 @@ class _OverviewPageState extends State<OverviewPage> {
     } catch (_) {}
   }
 
+  Future<void> refreshUntilSettled({required bool expectRunning}) async {
+    for (var attempt = 0; attempt < 20; attempt++) {
+      final value = await widget.api.get('status');
+      if (!mounted) return;
+      setState(() => s = value);
+      final running = value['running'] == true;
+      final routed = value['routingApplied'] == true;
+      if (running == expectRunning && (!expectRunning || routed)) return;
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+  }
+
   Future<void> action(String p, [Map<String, dynamic>? b]) async {
     final connecting = p == 'connect';
     final switching = connecting && s?['running'] == true;
@@ -458,7 +470,7 @@ class _OverviewPageState extends State<OverviewPage> {
     });
     try {
       await widget.api.post(p, b);
-      await refresh();
+      await refreshUntilSettled(expectRunning: connecting);
       if (mounted) {
         setState(() => operation = connecting ? '接続完了' : '切断完了');
         toast(context, operation);
@@ -493,6 +505,98 @@ class _OverviewPageState extends State<OverviewPage> {
     );
     if (selected != null && mounted) {
       await action('connect', {'line_id': selected});
+    }
+  }
+
+  Future<void> chooseRoutingMode() async {
+    if (busy || s == null) return;
+    final current = s!['mode'] == 'global' ? 'global' : 'smart';
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'ルーティングモード',
+                style: Theme.of(
+                  sheetContext,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                selected: current == 'smart',
+                title: const Text('スマートルーティング'),
+                subtitle: const Text('中国向け通信だけをOpenSocksへ送信'),
+                leading: const Icon(Icons.alt_route_rounded),
+                trailing: current == 'smart'
+                    ? const Icon(Icons.check_circle_rounded)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, 'smart'),
+              ),
+              ListTile(
+                selected: current == 'global',
+                title: const Text('フル中国回線ルーティング'),
+                subtitle: const Text('LANのWeb通信全体をOpenSocksへ送信'),
+                leading: const Icon(Icons.public_rounded),
+                trailing: current == 'global'
+                    ? const Icon(Icons.check_circle_rounded)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, 'global'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected == null || selected == current || !mounted) return;
+    await applyRoutingMode(selected);
+  }
+
+  Future<void> applyRoutingMode(String mode) async {
+    final current = s!;
+    setState(() {
+      busy = true;
+      operation = 'ルーティングモード変更中';
+    });
+    var stage = 0;
+    const stages = ['ルーティングモード変更中', 'ネットワーク構成中', 'インターフェース処理中'];
+    final progress = Timer.periodic(const Duration(milliseconds: 700), (_) {
+      if (!mounted || stage >= stages.length - 1) {
+        return;
+      }
+      setState(() => operation = stages[++stage]);
+    });
+    try {
+      await widget.api.post('settings', {
+        'mode': mode,
+        'tun': current['tun'] == true,
+        'free_only': current['freeOnly'] == true,
+        'auto_connect': current['autoConnect'] == true,
+        'auto_route': current['autoRoute'] == true,
+        'region': current['region'] ?? '',
+        'exclude_regions': current['excludeRegions'] ?? '',
+        'include_domains': current['includeDomains'] ?? '',
+        'exclude_domains': current['excludeDomains'] ?? '',
+        'include_cidrs': current['includeCIDRs'] ?? '',
+        'exclude_cidrs': current['excludeCIDRs'] ?? '',
+      });
+      await refreshUntilSettled(expectRunning: current['running'] == true);
+      if (mounted) toast(context, 'ルーティングモードを変更しました');
+    } catch (e) {
+      if (mounted) toast(context, e, true);
+    } finally {
+      progress.cancel();
+      if (mounted) {
+        setState(() {
+          busy = false;
+          operation = '';
+        });
+      }
     }
   }
 
@@ -618,54 +722,68 @@ class _OverviewPageState extends State<OverviewPage> {
           ),
           const SizedBox(height: 28),
           Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        c,
-                      ).colorScheme.primary.withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: busy ? null : chooseRoutingMode,
+              borderRadius: BorderRadius.circular(22),
+              child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        color: Theme.of(
+                          c,
+                        ).colorScheme.primary.withValues(alpha: .12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.route_rounded),
                     ),
-                    child: const Icon(Icons.route_rounded),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          x['mode'] == 'global' ? 'フル中国回線ルーティング' : 'スマートルーティング',
-                          style: const TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          x['routingApplied'] == true
-                              ? 'ネットワーク経路は正常です'
-                              : 'ネットワーク経路を復元中',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: x['routingApplied'] == true
-                                ? Theme.of(c).colorScheme.primary
-                                : Theme.of(c).colorScheme.tertiary,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            x['mode'] == 'global'
+                                ? 'フル中国回線ルーティング'
+                                : 'スマートルーティング',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 3),
+                          Text(
+                            x['running'] != true
+                                ? 'ネットワーク経路は停止中です'
+                                : x['routingApplied'] == true
+                                ? 'ネットワーク経路は正常です'
+                                : 'ネットワーク経路を復元中',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: x['running'] != true
+                                  ? Theme.of(c).colorScheme.onSurfaceVariant
+                                  : x['routingApplied'] == true
+                                  ? Theme.of(c).colorScheme.primary
+                                  : Theme.of(c).colorScheme.tertiary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Icon(
-                    x['routingApplied'] == true
-                        ? Icons.check_circle
-                        : Icons.sync,
-                    color: x['routingApplied'] == true
-                        ? Theme.of(c).colorScheme.primary
-                        : Theme.of(c).colorScheme.tertiary,
-                  ),
-                ],
+                    Icon(
+                      x['running'] != true
+                          ? Icons.pause_circle_outline_rounded
+                          : x['routingApplied'] == true
+                          ? Icons.check_circle
+                          : Icons.sync,
+                      color: x['running'] != true
+                          ? Theme.of(c).colorScheme.onSurfaceVariant
+                          : x['routingApplied'] == true
+                          ? Theme.of(c).colorScheme.primary
+                          : Theme.of(c).colorScheme.tertiary,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
