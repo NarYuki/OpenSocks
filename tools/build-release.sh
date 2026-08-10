@@ -64,6 +64,7 @@ minimal_control="$WORK/minimal-control"
 minimal_data="$WORK/minimal-data"
 mkdir -p "$minimal_control" "$minimal_data/etc/init.d" "$minimal_data/etc/config" "$minimal_data/etc/opensocks" "$minimal_data/usr/lib/opensocks"
 binary_sha="$(shasum -a 256 "$OUT/opensocks-linux-mipsle.gz" | awk '{print $1}')"
+binary_url="${BINARY_URL:-https://rel.n4t.su/opkg/opensocks-linux-mipsle.gz}"
 cat > "$minimal_control/control" <<EOF
 Package: opensocks-minimal
 Version: ${VERSION}-1
@@ -77,10 +78,19 @@ Maintainer: OpenSocks Developers
 Description: Minimal verified download-on-boot launcher for OpenSocks
 EOF
 printf '/etc/config/opensocks\n' > "$minimal_control/conffiles"
+cat > "$minimal_control/postinst" <<EOF
+#!/bin/sh
+[ -n "\${IPKG_INSTROOT:-}" ] && exit 0
+uci set opensocks.settings.binary_url='$binary_url'
+uci set opensocks.settings.binary_sha256='$binary_sha'
+uci commit opensocks
+/etc/init.d/opensocks enable
+exit 0
+EOF
 cp "$ROOT/openwrt/opensocks-minimal/files/etc/init.d/opensocks" "$minimal_data/etc/init.d/opensocks"
 cp "$ROOT/openwrt/opensocks-minimal/files/usr/lib/opensocks/launcher.sh" "$minimal_data/usr/lib/opensocks/launcher.sh"
 sed "s/@BINARY_SHA256@/$binary_sha/" "$ROOT/openwrt/opensocks-minimal/files/etc/config/opensocks" > "$minimal_data/etc/config/opensocks"
-chmod 0755 "$minimal_data/etc/init.d/opensocks" "$minimal_data/usr/lib/opensocks/launcher.sh"
+chmod 0755 "$minimal_control/postinst" "$minimal_data/etc/init.d/opensocks" "$minimal_data/usr/lib/opensocks/launcher.sh"
 build_ipk opensocks-minimal all "$minimal_control" "$minimal_data"
 
 luci_control="$WORK/luci-control"
