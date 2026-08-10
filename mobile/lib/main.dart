@@ -263,15 +263,28 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int index = 0;
+  int overlayDepth = 0;
   late final pages = <Widget>[
-    OverviewPage(api: widget.api),
+    OverviewPage(
+      api: widget.api,
+      onOverlayVisibilityChanged: _setOverlayVisible,
+    ),
     TrafficPage(api: widget.api),
-    TestsPage(api: widget.api),
+    TestsPage(api: widget.api, onOverlayVisibilityChanged: _setOverlayVisible),
     AccountPage(api: widget.api),
   ];
+
+  void _setOverlayVisible(bool visible) {
+    if (!mounted) return;
+    setState(() {
+      overlayDepth = visible ? overlayDepth + 1 : math.max(0, overlayDepth - 1);
+    });
+  }
+
   @override
-  Widget build(BuildContext c) => AdaptiveScaffold(
-    appBar: AdaptiveAppBar(
+  Widget build(BuildContext c) {
+    final overlayVisible = overlayDepth > 0;
+    final adaptiveAppBar = AdaptiveAppBar(
       title: 'OpenSocks',
       subtitle: 'CHINA ROUTE CONTROLLER',
       useNativeToolbar: true,
@@ -282,13 +295,8 @@ class _HomePageState extends State<HomePage> {
           icon: Icons.phonelink_erase,
         ),
       ],
-    ),
-    body: IndexedStack(index: index, children: pages),
-    // Keep the floating Liquid Glass bar stable. Auto-minimizing while an
-    // IndexedStack changes tabs can leave the native UIKit bar half collapsed.
-    minimizeBehavior: TabBarMinimizeBehavior.never,
-    enableBlur: true,
-    bottomNavigationBar: AdaptiveBottomNavigationBar(
+    );
+    final adaptiveBottomBar = AdaptiveBottomNavigationBar(
       useNativeBottomBar: true,
       selectedIndex: index,
       onTap: (v) => setState(() => index = v),
@@ -316,8 +324,44 @@ class _HomePageState extends State<HomePage> {
           label: c.l10n.account,
         ),
       ],
-    ),
-  );
+    );
+    final body = IndexedStack(index: index, children: pages);
+
+    if (Theme.of(c).platform != TargetPlatform.iOS) {
+      return Scaffold(
+        extendBody: true,
+        appBar: AppBar(
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('OpenSocks'),
+              Text('CHINA ROUTE CONTROLLER', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+          actions: [
+            IconButton(
+              onPressed: widget.onForget,
+              icon: const Icon(Icons.phonelink_erase),
+            ),
+          ],
+        ),
+        body: body,
+        bottomNavigationBar: overlayVisible ? null : _androidNavigation(c),
+      );
+    }
+
+    return AdaptiveScaffold(
+      appBar: adaptiveAppBar,
+      body: body,
+      // Native iOS platform views otherwise bleed through Flutter modal sheets.
+      tabBarHidden: overlayVisible,
+      // Keep the floating Liquid Glass bar stable. Auto-minimizing while an
+      // IndexedStack changes tabs can leave the native UIKit bar half collapsed.
+      minimizeBehavior: TabBarMinimizeBehavior.never,
+      enableBlur: true,
+      bottomNavigationBar: adaptiveBottomBar,
+    );
+  }
 
   Widget _androidNavigation(BuildContext c) {
     final colors = Theme.of(c).colorScheme;
@@ -405,8 +449,13 @@ void toast(BuildContext c, Object v, [bool bad = false]) {
 }
 
 class OverviewPage extends StatefulWidget {
-  const OverviewPage({super.key, required this.api});
+  const OverviewPage({
+    super.key,
+    required this.api,
+    required this.onOverlayVisibilityChanged,
+  });
   final OpenSocksApi api;
+  final ValueChanged<bool> onOverlayVisibilityChanged;
   @override
   State<OverviewPage> createState() => _OverviewPageState();
 }
@@ -502,19 +551,30 @@ class _OverviewPageState extends State<OverviewPage> {
   }
 
   Future<void> chooseServer() async {
-    final selected = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: .94,
-        child: LinesPage(
-          api: widget.api,
-          onSelect: (id) => Navigator.pop(sheetContext, id),
+    widget.onOverlayVisibilityChanged(true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      widget.onOverlayVisibilityChanged(false);
+      return;
+    }
+    int? selected;
+    try {
+      selected = await showModalBottomSheet<int>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) => FractionallySizedBox(
+          heightFactor: .94,
+          child: LinesPage(
+            api: widget.api,
+            onSelect: (id) => Navigator.pop(sheetContext, id),
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      widget.onOverlayVisibilityChanged(false);
+    }
     if (selected != null && mounted) {
       await action('connect', {'line_id': selected});
     }
@@ -523,48 +583,60 @@ class _OverviewPageState extends State<OverviewPage> {
   Future<void> chooseRoutingMode() async {
     if (busy || s == null) return;
     final current = s!['mode'] == 'global' ? 'global' : 'smart';
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                sheetContext.l10n.routingMode,
-                style: Theme.of(
-                  sheetContext,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                selected: current == 'smart',
-                title: Text(sheetContext.l10n.smartRouting),
-                subtitle: Text(sheetContext.l10n.smartDescription),
-                leading: const Icon(Icons.alt_route_rounded),
-                trailing: current == 'smart'
-                    ? const Icon(Icons.check_circle_rounded)
-                    : null,
-                onTap: () => Navigator.pop(sheetContext, 'smart'),
-              ),
-              ListTile(
-                selected: current == 'global',
-                title: Text(sheetContext.l10n.globalRouting),
-                subtitle: Text(sheetContext.l10n.globalDescription),
-                leading: const Icon(Icons.public_rounded),
-                trailing: current == 'global'
-                    ? const Icon(Icons.check_circle_rounded)
-                    : null,
-                onTap: () => Navigator.pop(sheetContext, 'global'),
-              ),
-            ],
+    widget.onOverlayVisibilityChanged(true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      widget.onOverlayVisibilityChanged(false);
+      return;
+    }
+    String? selected;
+    try {
+      selected = await showModalBottomSheet<String>(
+        context: context,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  sheetContext.l10n.routingMode,
+                  style: Theme.of(
+                    sheetContext,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  selected: current == 'smart',
+                  title: Text(sheetContext.l10n.smartRouting),
+                  subtitle: Text(sheetContext.l10n.smartDescription),
+                  leading: const Icon(Icons.alt_route_rounded),
+                  trailing: current == 'smart'
+                      ? const Icon(Icons.check_circle_rounded)
+                      : null,
+                  onTap: () => Navigator.pop(sheetContext, 'smart'),
+                ),
+                ListTile(
+                  selected: current == 'global',
+                  title: Text(sheetContext.l10n.globalRouting),
+                  subtitle: Text(sheetContext.l10n.globalDescription),
+                  leading: const Icon(Icons.public_rounded),
+                  trailing: current == 'global'
+                      ? const Icon(Icons.check_circle_rounded)
+                      : null,
+                  onTap: () => Navigator.pop(sheetContext, 'global'),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    } finally {
+      widget.onOverlayVisibilityChanged(false);
+    }
     if (selected == null || selected == current || !mounted) return;
     await applyRoutingMode(selected);
   }
@@ -1295,8 +1367,13 @@ class _TrafficPageState extends State<TrafficPage> {
 }
 
 class TestsPage extends StatefulWidget {
-  const TestsPage({super.key, required this.api});
+  const TestsPage({
+    super.key,
+    required this.api,
+    required this.onOverlayVisibilityChanged,
+  });
   final OpenSocksApi api;
+  final ValueChanged<bool> onOverlayVisibilityChanged;
   @override
   State<TestsPage> createState() => _TestsPageState();
 }
@@ -1595,65 +1672,81 @@ class _TestsPageState extends State<TestsPage> {
   Future<void> chooseSpeedServer() async {
     final loading = _loadSpeedServerPicker();
     final search = TextEditingController();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      builder: (sheetContext) => FractionallySizedBox(
-        heightFactor: .94,
-        child: StatefulBuilder(
-          builder: (context, modalSetState) => FutureBuilder<void>(
-            future: loading,
-            builder: (context, snapshot) => DefaultTabController(
-              length: 2,
-              child: Column(
-                children: [
-                  const TabBar(
-                    tabs: [
-                      Tab(text: 'speedtest.cn'),
-                      Tab(text: 'Ookla'),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: TextField(
-                      controller: search,
-                      onChanged: (_) => modalSetState(() {}),
-                      decoration: InputDecoration(
-                        hintText: context.l10n.searchTestNode,
-                        prefixIcon: const Icon(Icons.search_rounded),
-                      ),
+    widget.onOverlayVisibilityChanged(true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      widget.onOverlayVisibilityChanged(false);
+      search.dispose();
+      return;
+    }
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) => FractionallySizedBox(
+          heightFactor: .94,
+          child: StatefulBuilder(
+            builder: (context, modalSetState) => FutureBuilder<void>(
+              future: loading,
+              builder: (context, snapshot) => DefaultTabController(
+                length: 2,
+                child: Column(
+                  children: [
+                    const TabBar(
+                      tabs: [
+                        Tab(text: 'speedtest.cn'),
+                        Tab(text: 'Ookla'),
+                      ],
                     ),
-                  ),
-                  if (snapshot.connectionState != ConnectionState.done)
-                    const LinearProgressIndicator(),
-                  if (snapshot.hasError)
                     Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        context.l10n.serverFetchError('${snapshot.error}'),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                      padding: const EdgeInsets.all(16),
+                      child: TextField(
+                        controller: search,
+                        onChanged: (_) => modalSetState(() {}),
+                        decoration: InputDecoration(
+                          hintText: context.l10n.searchTestNode,
+                          prefixIcon: const Icon(Icons.search_rounded),
                         ),
                       ),
                     ),
-                  Expanded(
-                    child: TabBarView(
-                      children: [
-                        _speedServerList(context, cn, 'cn', search.text),
-                        _speedServerList(context, ookla, 'ookla', search.text),
-                      ],
+                    if (snapshot.connectionState != ConnectionState.done)
+                      const LinearProgressIndicator(),
+                    if (snapshot.hasError)
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          context.l10n.serverFetchError('${snapshot.error}'),
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    Expanded(
+                      child: TabBarView(
+                        children: [
+                          _speedServerList(context, cn, 'cn', search.text),
+                          _speedServerList(
+                            context,
+                            ookla,
+                            'ookla',
+                            search.text,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-    search.dispose();
+      );
+    } finally {
+      widget.onOverlayVisibilityChanged(false);
+      search.dispose();
+    }
   }
 
   Future<void> _loadSpeedServerPicker() async {

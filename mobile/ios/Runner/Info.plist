@@ -19,7 +19,7 @@
 		<string>zh-Hans</string>
 	</array>
 	<key>CFBundleDisplayName</key>
-	<string>Opensocks Mobile</string>
+	<string>OpenSocks</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

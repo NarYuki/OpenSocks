@@ -21,6 +21,7 @@ OpenSocks 是用于在 OpenWrt 上使用 Transocks（穿梭）中国回国线路
 推荐使用软件源：
 
 ```sh
+wget -O /etc/opkg/keys/d24a5e234001294c https://rel.n4t.su/opkg/d24a5e234001294c
 echo 'src/gz opensocks https://rel.n4t.su/opkg' >> /etc/opkg/customfeeds.conf
 opkg update
 opkg install opensocks-minimal luci-app-opensocks

@@ -28,6 +28,7 @@ etc/opensocks/
 credentials.json
 credentials.enc
 credentials.key
+*.sec
 traffic.json
 history.json
 *.log

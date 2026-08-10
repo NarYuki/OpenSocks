@@ -1,0 +1,81 @@
+name: Build OpenWrt packages
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwrt-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: OpenWrt IPK and opkg feed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: openwrt/opensocks/src/go.mod
+          cache: false
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential ca-certificates cmake git gzip tar
+
+      - name: Build pinned OpenWrt usign
+        run: |
+          git clone --no-checkout https://git.openwrt.org/project/usign.git "${RUNNER_TEMP}/usign"
+          git -C "${RUNNER_TEMP}/usign" checkout c4c72b1b07945ee192361dc751291a7c98d6adcd
+          cmake -S "${RUNNER_TEMP}/usign" -B "${RUNNER_TEMP}/usign/build" -DCMAKE_BUILD_TYPE=Release
+          cmake --build "${RUNNER_TEMP}/usign/build" --parallel
+
+      - name: Build OpenWrt packages
+        env:
+          OPKG_SIGNING_KEY: ${{ secrets.OPKG_SIGNING_KEY }}
+          OPENWRT_ONLY: "1"
+          RELEASE_DIR: ${{ runner.temp }}/opensocks-release
+          VERSION: 0.2.0
+        run: |
+          test -n "$OPKG_SIGNING_KEY" || { echo 'OPKG_SIGNING_KEY secret is required' >&2; exit 1; }
+          umask 077
+          printf '%s\n' "$OPKG_SIGNING_KEY" > "${RUNNER_TEMP}/opensocks-usign.sec"
+          OPENWRT_ONLY=1 \
+          REQUIRE_SIGNATURE=1 \
+          RELEASE_DIR="$RELEASE_DIR" \
+          VERSION="$VERSION" \
+          USIGN="${RUNNER_TEMP}/usign/build/usign" \
+          OPKG_SIGNING_KEY_FILE="${RUNNER_TEMP}/opensocks-usign.sec" \
+          OPKG_PUBLIC_KEY_FILE="$GITHUB_WORKSPACE/keys/d24a5e234001294c" \
+          ./tools/build-release.sh
+
+      - name: Verify opkg feed
+        env:
+          RELEASE_DIR: ${{ runner.temp }}/opensocks-release
+        run: |
+          test -s "$RELEASE_DIR/Packages"
+          test -s "$RELEASE_DIR/Packages.gz"
+          test -s "$RELEASE_DIR/Packages.sig"
+          test -s "$RELEASE_DIR/SHA256SUMS"
+          test -s "$RELEASE_DIR/SHA256SUMS.sig"
+          test -s "$RELEASE_DIR/d24a5e234001294c"
+          test "$(find "$RELEASE_DIR" -maxdepth 1 -name '*.ipk' | wc -l)" -eq 3
+          gzip -t "$RELEASE_DIR/Packages.gz"
+          shasum -a 256 -c "$RELEASE_DIR/SHA256SUMS"
+          "${RUNNER_TEMP}/usign/build/usign" -V -m "$RELEASE_DIR/Packages" -p "$GITHUB_WORKSPACE/keys/d24a5e234001294c" -x "$RELEASE_DIR/Packages.sig"
+          "${RUNNER_TEMP}/usign/build/usign" -V -m "$RELEASE_DIR/SHA256SUMS" -p "$GITHUB_WORKSPACE/keys/d24a5e234001294c" -x "$RELEASE_DIR/SHA256SUMS.sig"
+
+      - name: Upload OpenWrt artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opensocks-openwrt-${{ github.sha }}
+          path: ${{ runner.temp }}/opensocks-release/
+          if-no-files-found: error
+          retention-days: 30

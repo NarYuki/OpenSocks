@@ -120,8 +120,41 @@ for ipk in "$OUT"/*.ipk; do
 done
 gzip -9c "$OUT/Packages" > "$OUT/Packages.gz"
 
+USIGN_BIN="${USIGN:-usign}"
+SIGNING_KEY="${OPKG_SIGNING_KEY_FILE:-}"
+PUBLIC_KEY="${OPKG_PUBLIC_KEY_FILE:-}"
+if [ -n "$SIGNING_KEY" ]; then
+	[ -f "$SIGNING_KEY" ] || { printf 'Signing key not found: %s\n' "$SIGNING_KEY" >&2; exit 1; }
+	[ -f "$PUBLIC_KEY" ] || { printf 'Public key not found: %s\n' "$PUBLIC_KEY" >&2; exit 1; }
+	command -v "$USIGN_BIN" >/dev/null 2>&1 || [ -x "$USIGN_BIN" ] || {
+		printf 'usign executable not found: %s\n' "$USIGN_BIN" >&2
+		exit 1
+	}
+	key_fingerprint="$($USIGN_BIN -F -p "$PUBLIC_KEY")"
+	cp "$PUBLIC_KEY" "$OUT/$key_fingerprint"
+	"$USIGN_BIN" -S -m "$OUT/Packages" -s "$SIGNING_KEY" -x "$OUT/Packages.sig"
+	"$USIGN_BIN" -V -m "$OUT/Packages" -p "$PUBLIC_KEY" -x "$OUT/Packages.sig"
+elif [ "${REQUIRE_SIGNATURE:-0}" = "1" ]; then
+	printf 'OPKG_SIGNING_KEY_FILE is required; refusing to publish unsigned packages.\n' >&2
+	exit 1
+fi
+
+write_checksums() {
+	( cd "$OUT" && find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name SHA256SUMS.sig -print | sort | xargs shasum -a 256 > SHA256SUMS )
+	if [ -n "$SIGNING_KEY" ]; then
+		"$USIGN_BIN" -S -m "$OUT/SHA256SUMS" -s "$SIGNING_KEY" -x "$OUT/SHA256SUMS.sig"
+		"$USIGN_BIN" -V -m "$OUT/SHA256SUMS" -p "$PUBLIC_KEY" -x "$OUT/SHA256SUMS.sig"
+	fi
+}
+
+if [ "${OPENWRT_ONLY:-0}" = "1" ]; then
+	write_checksums
+	printf 'OpenWrt release artifacts written to %s\n' "$OUT"
+	exit 0
+fi
+
 ( cd "$ROOT/mobile" && flutter build apk --release && flutter build ios --release --no-codesign )
 cp "$ROOT/mobile/build/app/outputs/flutter-apk/app-release.apk" "$OUT/OpenSocks-${VERSION}-android.apk"
 ( cd "$ROOT/mobile/build/ios/iphoneos" && zip -qry "$OUT/OpenSocks-${VERSION}-ios-unsigned.zip" Runner.app )
-( cd "$OUT" && find . -maxdepth 1 -type f ! -name SHA256SUMS -print | sort | xargs shasum -a 256 > SHA256SUMS )
+write_checksums
 printf 'Release artifacts written to %s\n' "$OUT"

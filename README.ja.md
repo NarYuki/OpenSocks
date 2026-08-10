@@ -21,6 +21,7 @@ OpenSocksはTransocks（穿梭）の中国向け回国回線サービスをOpenW
 opkgリポジトリの利用を推奨します。
 
 ```sh
+wget -O /etc/opkg/keys/d24a5e234001294c https://rel.n4t.su/opkg/d24a5e234001294c
 echo 'src/gz opensocks https://rel.n4t.su/opkg' >> /etc/opkg/customfeeds.conf
 opkg update
 opkg install opensocks-minimal luci-app-opensocks

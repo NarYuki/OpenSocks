@@ -1,4 +1,4 @@
-package io.opensocks.opensocks_mobile
+package moe.n4tsu.opensocks
 
 import io.flutter.embedding.android.FlutterActivity
 

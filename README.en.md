@@ -21,6 +21,7 @@ OpenSocks is an open-source OpenWrt client for the Transocks China return-route 
 Using the opkg repository is recommended:
 
 ```sh
+wget -O /etc/opkg/keys/d24a5e234001294c https://rel.n4t.su/opkg/d24a5e234001294c
 echo 'src/gz opensocks https://rel.n4t.su/opkg' >> /etc/opkg/customfeeds.conf
 opkg update
 opkg install opensocks-minimal luci-app-opensocks
