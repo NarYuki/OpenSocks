@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
-// adaptive_platform_ui does not re-export this iOS 26 widget yet.
+// adaptive_platform_ui does not re-export this iOS 26 scaffold yet.
 // ignore: implementation_imports
-import 'package:adaptive_platform_ui/src/widgets/ios26/ios26_native_toolbar.dart';
+import 'package:adaptive_platform_ui/src/widgets/ios26/ios26_scaffold.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -293,53 +293,101 @@ class _HomePageState extends State<HomePage> {
     final overlayVisible = overlayDepth > 0;
     final body = IndexedStack(index: index, children: pages);
     final isIOS = Theme.of(c).platform == TargetPlatform.iOS;
-    final usesLiquidBar = isIOS && PlatformInfo.isIOS26OrHigher();
-    final brightness = Theme.of(c).brightness;
 
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: brightness == Brightness.dark
-            ? Brightness.light
-            : Brightness.dark,
-        statusBarBrightness: brightness,
-      ),
-      child: Scaffold(
+    if (!isIOS) {
+      return Scaffold(
         extendBody: true,
-        appBar: isIOS
-            ? null
-            : AppBar(
-                title: const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('OpenSocks'),
-                    Text(
-                      'CHINA ROUTE CONTROLLER',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ],
-                ),
-                actions: [
-                  IconButton(
-                    onPressed: widget.onForget,
-                    icon: const Icon(Icons.phonelink_erase),
-                  ),
-                ],
-              ),
-        body: isIOS
-            ? Column(
-                children: [
-                  _IOSHomeHeader(onForget: widget.onForget),
-                  Expanded(child: body),
-                ],
-              )
-            : body,
-        bottomNavigationBar: usesLiquidBar
-            ? _iosLiquidNavigation(c, hidden: overlayVisible)
-            : (overlayVisible ? null : _androidNavigation(c)),
-      ),
+        appBar: AppBar(
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('OpenSocks'),
+              Text('CHINA ROUTE CONTROLLER', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+          actions: [
+            IconButton(
+              onPressed: widget.onForget,
+              icon: const Icon(Icons.phonelink_erase),
+            ),
+          ],
+        ),
+        body: body,
+        bottomNavigationBar: overlayVisible ? null : _androidNavigation(c),
+      );
+    }
+
+    final adaptiveAppBar = AdaptiveAppBar(
+      title: 'OpenSocks',
+      subtitle: 'CHINA ROUTE CONTROLLER',
+      useNativeToolbar: true,
+      actions: [
+        AdaptiveAppBarAction(
+          onPressed: widget.onForget,
+          iosSymbol: 'iphone.slash',
+          icon: Icons.phonelink_erase,
+        ),
+      ],
+    );
+    final adaptiveBottomBar = AdaptiveBottomNavigationBar(
+      useNativeBottomBar: true,
+      selectedIndex: index,
+      onTap: (v) => setState(() => index = v),
+      selectedItemColor: Theme.of(c).colorScheme.primary,
+      bottomNavigationBar: _androidNavigation(c),
+      items: _navigationItems(c),
+    );
+
+    if (PlatformInfo.isIOS26OrHigher()) {
+      // Use the native scaffold itself so the UIKit status-bar material,
+      // translucent blur and scroll-edge gradient remain intact.  Calling it
+      // directly also avoids AdaptiveScaffold's selected-index ValueKey, which
+      // recreated the entire page whenever the active tab changed.
+      return IOS26Scaffold(
+        title: adaptiveAppBar.title,
+        titleWidget: _iosTitle(c),
+        actions: adaptiveAppBar.actions,
+        tintColor: Theme.of(c).colorScheme.primary,
+        bottomNavigationBar: adaptiveBottomBar,
+        tabBarHidden: overlayVisible,
+        minimizeBehavior: TabBarMinimizeBehavior.never,
+        enableBlur: true,
+        children: [SafeArea(top: true, bottom: false, child: body)],
+      );
+    }
+
+    return AdaptiveScaffold(
+      appBar: adaptiveAppBar,
+      body: SafeArea(top: true, bottom: false, child: body),
+      tabBarHidden: overlayVisible,
+      minimizeBehavior: TabBarMinimizeBehavior.never,
+      enableBlur: true,
+      bottomNavigationBar: adaptiveBottomBar,
     );
   }
+
+  Widget _iosTitle(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      Text(
+        'OpenSocks',
+        style: TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+          color: CupertinoColors.label.resolveFrom(context),
+        ),
+      ),
+      Text(
+        'CHINA ROUTE CONTROLLER',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.normal,
+          color: CupertinoColors.secondaryLabel.resolveFrom(context),
+        ),
+      ),
+    ],
+  );
 
   List<AdaptiveNavigationDestination> _navigationItems(BuildContext c) => [
     AdaptiveNavigationDestination(
@@ -363,16 +411,6 @@ class _HomePageState extends State<HomePage> {
       label: c.l10n.account,
     ),
   ];
-
-  Widget _iosLiquidNavigation(BuildContext c, {required bool hidden}) =>
-      IOS26NativeTabBar(
-        destinations: _navigationItems(c),
-        selectedIndex: index,
-        onTap: (v) => setState(() => index = v),
-        tint: Theme.of(c).colorScheme.primary,
-        minimizeBehavior: TabBarMinimizeBehavior.never,
-        hidden: hidden,
-      );
 
   Widget _androidNavigation(BuildContext c) {
     final colors = Theme.of(c).colorScheme;
@@ -423,69 +461,6 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _IOSHomeHeader extends StatelessWidget {
-  const _IOSHomeHeader({required this.onForget});
-
-  final VoidCallback onForget;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          'OpenSocks',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w600,
-            color: CupertinoColors.label.resolveFrom(context),
-          ),
-        ),
-        Text(
-          'CHINA ROUTE CONTROLLER',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.normal,
-            color: CupertinoColors.secondaryLabel.resolveFrom(context),
-          ),
-        ),
-      ],
-    );
-    final action = AdaptiveAppBarAction(
-      iosSymbol: 'iphone.slash',
-      icon: Icons.phonelink_erase,
-      onPressed: onForget,
-    );
-    final toolbar = PlatformInfo.isIOS26OrHigher()
-        ? IOS26NativeToolbar(
-            title: 'OpenSocks',
-            titleWidget: title,
-            actions: [action],
-            onActionTap: (_) => onForget(),
-            tintColor: Theme.of(context).colorScheme.primary,
-          )
-        : CupertinoNavigationBar(
-            backgroundColor: Colors.transparent,
-            border: null,
-            middle: title,
-            trailing: CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: onForget,
-              child: const Icon(Icons.phonelink_erase),
-            ),
-          );
-
-    return ColoredBox(
-      color: Colors.transparent,
-      child: SafeArea(
-        bottom: false,
-        child: SizedBox(height: 44, child: toolbar),
       ),
     );
   }
