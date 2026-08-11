@@ -145,6 +145,17 @@ func TestDNSResponseKeepsEveryMatchingService(t *testing.T) {
 	}
 }
 
+func TestChinaRouteDNSNamesIncludeAllCNDomainsAndKnownServices(t *testing.T) {
+	for _, name := range []string{"assets.example.cn", "quote.eastmoney.com", "cdn.game.gtimg.cn"} {
+		if !chinaRouteForDNSNames([]string{name}) {
+			t.Fatalf("China DNS name %q was not routed", name)
+		}
+	}
+	if chinaRouteForDNSNames([]string{"www.google.com"}) {
+		t.Fatal("non-China DNS name was routed")
+	}
+}
+
 func TestHonorOfKingsDirectBattleServers(t *testing.T) {
 	for _, address := range []string{"43.129.255.150", "43.129.111.193", "43.154.252.89"} {
 		ip := net.ParseIP(address)

@@ -68,6 +68,12 @@ func observeDNSAnswers() {
 		}
 		names, ips := dnsIPv4Answers(buf[:n], trustedIP, trustedMAC)
 		if len(ips) > 0 {
+			if chinaRouteForDNSNames(names) {
+				select {
+				case learned <- learning{group: "", ips: ips}:
+				default:
+				}
+			}
 			for _, group := range serviceGroupsForDNSNames(names) {
 				select {
 				case learned <- learning{group: group, ips: ips}:
@@ -104,6 +110,22 @@ func serviceForDNSNames(names []string) string {
 		return groups[0]
 	}
 	return ""
+}
+
+func chinaRouteForDNSNames(names []string) bool {
+	for _, name := range names {
+		n := strings.TrimSuffix(strings.ToLower(name), ".")
+		if n == "cn" || strings.HasSuffix(n, ".cn") {
+			return true
+		}
+		for _, suffix := range cnDomainSuffixes {
+			s := strings.TrimPrefix(strings.ToLower(suffix), ".")
+			if n == s || strings.HasSuffix(n, "."+s) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // A DNS response can contain a service hostname followed by one or more CDN
@@ -143,12 +165,14 @@ func flushLearnedDNS(pending map[string]map[string]bool) {
 			ips = append(ips, ip)
 		}
 		sets["domain4"] = append(sets["domain4"], ips...)
-		sets["svc_"+group+"4"] = append(sets["svc_"+group+"4"], ips...)
+		if group != "" {
+			sets["svc_"+group+"4"] = append(sets["svc_"+group+"4"], ips...)
+		}
 	}
 	addDynamicElements(sets)
 }
 
-func dnsIPv4Answers(frame []byte, trustedIP net.IP, trustedMAC net.HardwareAddr) ([]string, []string) {
+func dnsIPv4Answers(frame []byte, _ net.IP, trustedMAC net.HardwareAddr) ([]string, []string) {
 	if len(frame) < 34 || binary.BigEndian.Uint16(frame[12:14]) != 0x0800 {
 		return nil, nil
 	}
@@ -160,9 +184,10 @@ func dnsIPv4Answers(frame []byte, trustedIP net.IP, trustedMAC net.HardwareAddr)
 	if ihl < 20 || len(frame) < ip+ihl+8 || frame[ip+9] != 17 {
 		return nil, nil
 	}
-	if trustedIP == nil || !net.IP(frame[ip+12:ip+16]).Equal(trustedIP) {
-		return nil, nil
-	}
+	// A DNS request transparently redirected from an external resolver is
+	// returned to the LAN with that resolver's source IP restored by conntrack.
+	// The router's verified source MAC is therefore the stable trust boundary;
+	// requiring its LAN IP here would discard exactly those captured replies.
 	udp := ip + ihl
 	if binary.BigEndian.Uint16(frame[udp:udp+2]) != 53 {
 		return nil, nil

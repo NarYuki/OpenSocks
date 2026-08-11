@@ -34,6 +34,21 @@ var honorOfKingsDirectCIDRs = []string{
 	"43.154.0.0/16",
 }
 
+// Redirect ordinary DNS to the router and prevent well-known encrypted DNS
+// endpoints from hiding the destination names that Smart mode needs to learn.
+// Connections are rejected instead of dropped so clients immediately fall
+// back to the router resolver without waiting for a timeout.
+var publicEncryptedDNS4 = []string{
+	"1.0.0.1/32", "1.1.1.1/32",
+	"8.8.4.4/32", "8.8.8.8/32",
+	"9.9.9.9/32", "149.112.112.112/32",
+	"45.90.28.0/24", "45.90.30.0/24",
+	"76.76.2.0/24", "76.76.10.0/24",
+	"77.88.8.0/24", "94.140.14.0/24", "94.140.15.0/24",
+	"185.228.168.0/24", "185.228.169.0/24",
+	"208.67.220.0/24", "208.67.222.0/24",
+}
+
 // Startup recovery, explicit connect and the routing watchdog may converge at
 // the same time. Serialize complete table replacement so nft never appends a
 // second copy of the rules to a table another goroutine just created.
@@ -96,9 +111,21 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		writeIPv4Set(&script, "include4", validCIDRs(cfg.IncludeCIDRs))
 		writeIPv4Set(&script, "exclude4", validCIDRs(cfg.ExcludeCIDRs))
 		writeIPv4Set(&script, "svc_honor_direct4", honorOfKingsDirectCIDRs)
+		writeIPv4Set(&script, "encrypted_dns4", publicEncryptedDNS4)
 		for _, group := range chinaServiceGroups {
 			writeDynamicIPv4Set(&script, "svc_"+group.Name+"4", serviceIPs[group.Name])
 		}
+	}
+	if mode != "global" {
+		lan := detectLANDevice()
+		script.WriteString(" chain dns_capture { type nat hook prerouting priority dstnat - 10; policy accept;\n")
+		script.WriteString("  iifname \"" + lan + "\" meta l4proto udp udp dport 53 counter redirect to :53\n")
+		script.WriteString("  iifname \"" + lan + "\" meta l4proto tcp tcp dport 53 counter redirect to :53\n")
+		script.WriteString(" }\n chain smart_leak_guard { type filter hook forward priority mangle - 2; policy accept;\n")
+		script.WriteString("  iifname \"" + lan + "\" meta nfproto ipv6 meta l4proto { tcp, udp } counter reject\n")
+		script.WriteString("  iifname \"" + lan + "\" meta l4proto { tcp, udp } th dport 853 counter reject\n")
+		script.WriteString("  iifname \"" + lan + "\" ip daddr @encrypted_dns4 meta l4proto { tcp, udp } th dport 443 counter reject\n")
+		script.WriteString(" }\n")
 	}
 	script.WriteString(" chain prerouting { type nat hook prerouting priority dstnat - 1; policy accept;\n")
 	script.WriteString("  iifname != \"" + detectLANDevice() + "\" return\n")

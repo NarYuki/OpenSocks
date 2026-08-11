@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.10
+
+### Smart routing
+
+- Captured LAN DNS through the router so changing service subdomains are learned automatically.
+- Added all `.cn` domains and every known Chinese-service subdomain to the live Smart routing set.
+- Prevented encrypted-DNS and IPv6 paths from bypassing the observable IPv4 Smart route.
+- Routed and classified Honor of Kings battle servers that are supplied as direct overseas IP addresses.
+
+### Controls
+
+- Applied mobile routing and session selections immediately when an item is tapped and removed the extra Apply button.
+- Preserved unsaved LuCI settings while status information refreshes in the background.
+
 ## 0.2.9
 
 ### Routing controls
