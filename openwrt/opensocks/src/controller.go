@@ -406,6 +406,9 @@ func (c *controller) connect(wantID int) error {
 		AvailableProto: []string{"SS", "Trojan", "GTS"},
 		RegionID:       regionID,
 	}
+	if cfg.SessionCount > 1 {
+		return c.connectMultiLine(ln, req, switching, manualSelection, cfg, cfg.SessionCount)
+	}
 	var resp *connectResponse
 	for cycle := 0; cycle < 3; cycle++ {
 		resp, err = c.api.connect(ln.ID, req)
@@ -436,7 +439,7 @@ func (c *controller) connect(wantID int) error {
 	if err := c.engine.start(resp, cfg.Mode, false, ""); err != nil {
 		return err
 	}
-	if err := setupRedirect(cfg.Mode, c.engine.server); err != nil {
+	if err := setupRedirect(cfg.Mode, c.engine.server, 1); err != nil {
 		c.engine.stop()
 		return err
 	}
@@ -472,28 +475,30 @@ func (c *controller) status() map[string]any {
 	acc := loadAccount()
 	lanDevice, routingApplied := networkIntegrationState()
 	return map[string]any{
-		"running":          c.engine.isRunning(),
-		"lineID":           c.engine.lineID,
-		"lineName":         c.engine.lineName,
-		"token":            cfg.Token != "",
-		"mode":             cfg.Mode,
-		"tun":              false,
-		"engine":           "ss-redir",
-		"region":           cfg.Region,
-		"excludeRegions":   cfg.ExcludeRegions,
-		"includeDomains":   cfg.IncludeDomains,
-		"excludeDomains":   cfg.ExcludeDomains,
-		"includeCIDRs":     cfg.IncludeCIDRs,
-		"excludeCIDRs":     cfg.ExcludeCIDRs,
-		"selectedLineID":   cfg.SelectedLineID,
-		"freeOnly":         cfg.FreeOnly,
-		"autoConnect":      cfg.AutoConnect,
-		"autoRoute":        cfg.AutoRoute,
-		"account":          acc,
-		"vip":              activeVIP(acc),
-		"lanDevice":        lanDevice,
-		"routingApplied":   routingApplied,
-		"credentialsSaved": credentialsSaved(),
+		"running":            c.engine.isRunning(),
+		"lineID":             c.engine.lineID,
+		"lineName":           c.engine.lineName,
+		"token":              cfg.Token != "",
+		"mode":               cfg.Mode,
+		"tun":                false,
+		"engine":             "ss-redir",
+		"region":             cfg.Region,
+		"excludeRegions":     cfg.ExcludeRegions,
+		"includeDomains":     cfg.IncludeDomains,
+		"excludeDomains":     cfg.ExcludeDomains,
+		"includeCIDRs":       cfg.IncludeCIDRs,
+		"excludeCIDRs":       cfg.ExcludeCIDRs,
+		"selectedLineID":     cfg.SelectedLineID,
+		"freeOnly":           cfg.FreeOnly,
+		"autoConnect":        cfg.AutoConnect,
+		"autoRoute":          cfg.AutoRoute,
+		"sessionCount":       cfg.SessionCount,
+		"activeSessionCount": c.engine.activeSessionCount(),
+		"account":            acc,
+		"vip":                activeVIP(acc),
+		"lanDevice":          lanDevice,
+		"routingApplied":     routingApplied,
+		"credentialsSaved":   credentialsSaved(),
 	}
 }
 
@@ -514,6 +519,9 @@ func (c *controller) autoRouteWatchdog() {
 	defer ticker.Stop()
 	backoff, nextAttempt := 10*time.Second, time.Time{}
 	for range ticker.C {
+		if currentSpeedJob().Running {
+			continue
+		}
 		c.refreshSettings()
 		cfg := c.currentSettings()
 		if !cfg.AutoRoute {
@@ -539,7 +547,7 @@ func (c *controller) autoRouteWatchdog() {
 		}
 		_, applied := networkIntegrationState()
 		if c.engine.isRunning() && !applied {
-			if err := setupRedirect(cfg.Mode, c.engine.server); err != nil {
+			if err := setupRedirect(cfg.Mode, c.engine.server, c.engine.activeSessionCount()); err != nil {
 				logf("automatic routing recovery failed: %v", err)
 			}
 		}

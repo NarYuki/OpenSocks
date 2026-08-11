@@ -26,6 +26,8 @@ var (
 	engineBinary = "/usr/bin/mihomo"
 	engineAPI    = "127.0.0.1:9090"
 	mixedPort    = 7890
+	dualPort     = 7892
+	triplePort   = 7894
 	socksPort    = 7891
 	dnsPort      = 1053
 )
@@ -33,6 +35,8 @@ var (
 type engine struct {
 	mu        sync.Mutex
 	cmd       *exec.Cmd
+	cmd2      *exec.Cmd
+	cmd3      *exec.Cmd
 	connected bool
 	lineName  string
 	lineID    int
@@ -58,7 +62,7 @@ func cleanupStaleEngine() {
 			continue
 		}
 		text := strings.ReplaceAll(string(cmdline), "\x00", " ")
-		if strings.Contains(text, "ss-redir") && strings.Contains(text, engineConf) {
+		if strings.Contains(text, "ss-redir") && strings.Contains(text, engineDir+"/config") {
 			_ = syscall.Kill(pid, syscall.SIGTERM)
 		}
 	}
@@ -313,6 +317,18 @@ func ensureGeoIP(url string) error {
 // start launches the minimal Shadowsocks redirection engine. Current
 // Transocks lines provide SS/aes-256-cfb, so a full Clash core is unnecessary.
 func (e *engine) start(conn *connectResponse, mode string, tun bool, geoipURL string) error {
+	return e.startConnections(conn)
+}
+
+func (e *engine) startDual(primary, secondary *connectResponse) error {
+	return e.startConnections(primary, secondary)
+}
+
+func (e *engine) startConnections(connections ...*connectResponse) error {
+	if len(connections) < 1 || len(connections) > 3 {
+		return fmt.Errorf("session count must be between 1 and 3")
+	}
+	conn := connections[0]
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -327,29 +343,71 @@ func (e *engine) start(conn *connectResponse, mode string, tun bool, geoipURL st
 	if !fileExists(binary) {
 		return fmt.Errorf("lightweight engine %s is not installed", binary)
 	}
-	conf, err := json.MarshalIndent(map[string]any{
-		"server": boot.Server, "server_port": boot.Port,
-		"local_address": "0.0.0.0", "local_port": mixedPort,
-		"password": boot.Password, "method": boot.Method,
-		"timeout": 60, "mode": "tcp_and_udp", "fast_open": false,
-	}, "", "  ")
-	if err != nil {
-		return err
+	startOne := func(connection *connectResponse, port int, path string, udp bool) (*exec.Cmd, error) {
+		selected := selectedBoot(connection)
+		if selected == nil || strings.EqualFold(selected.Proto, "Trojan") {
+			return nil, fmt.Errorf("lightweight engine requires a Shadowsocks line")
+		}
+		conf, err := json.MarshalIndent(map[string]any{
+			"server": selected.Server, "server_port": selected.Port,
+			"local_address": "0.0.0.0", "local_port": port,
+			"password": selected.Password, "method": selected.Method,
+			"timeout": 60, "mode": map[bool]string{true: "tcp_and_udp", false: "tcp_only"}[udp], "fast_open": false,
+		}, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(path, conf, 0600); err != nil {
+			return nil, err
+		}
+		args := []string{"-c", path}
+		if udp {
+			args = append([]string{"-u"}, args...)
+		}
+		cmd := exec.Command(binary, args...)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Start(); err != nil {
+			return nil, err
+		}
+		return cmd, nil
 	}
 	if err := os.MkdirAll(engineDir, 0755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(engineConf, conf, 0600); err != nil {
-		return err
-	}
-
-	cmd := exec.Command(binary, "-u", "-c", engineConf)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
+	cmd, err := startOne(conn, mixedPort, engineConf, true)
+	if err != nil {
 		return fmt.Errorf("ss-redir start failed: %w", err)
 	}
 	e.cmd = cmd
+	if len(connections) >= 2 {
+		e.cmd2, err = startOne(connections[1], dualPort, engineDir+"/config-2.yaml", false)
+		if err != nil {
+			_ = e.cmd.Process.Signal(syscall.SIGTERM)
+			e.cmd.Wait()
+			e.cmd = nil
+			return fmt.Errorf("second ss-redir start failed: %w", err)
+		}
+	} else {
+		// Do not let speed-test helpers mistake a stale dual configuration for
+		// an active second authenticated session.
+		_ = os.Remove(engineDir + "/config-2.yaml")
+	}
+	if len(connections) >= 3 {
+		e.cmd3, err = startOne(connections[2], triplePort, engineDir+"/config-3.yaml", false)
+		if err != nil {
+			if e.cmd2 != nil {
+				_ = e.cmd2.Process.Signal(syscall.SIGTERM)
+				e.cmd2.Wait()
+				e.cmd2 = nil
+			}
+			_ = e.cmd.Process.Signal(syscall.SIGTERM)
+			e.cmd.Wait()
+			e.cmd = nil
+			return fmt.Errorf("third ss-redir start failed: %w", err)
+		}
+	} else {
+		_ = os.Remove(engineDir + "/config-3.yaml")
+	}
 	e.connected = true
 	e.lineName = conn.LineName
 	e.lineID = conn.LineID
@@ -365,6 +423,16 @@ func (e *engine) stop() {
 		e.cmd.Wait()
 		e.cmd = nil
 	}
+	if e.cmd2 != nil && e.cmd2.Process != nil {
+		e.cmd2.Process.Signal(syscall.SIGTERM)
+		e.cmd2.Wait()
+		e.cmd2 = nil
+	}
+	if e.cmd3 != nil && e.cmd3.Process != nil {
+		e.cmd3.Process.Signal(syscall.SIGTERM)
+		e.cmd3.Wait()
+		e.cmd3 = nil
+	}
 	e.connected = false
 	e.lineName = ""
 	e.lineID = 0
@@ -377,11 +445,36 @@ func (e *engine) isRunning() bool {
 	return e.isRunningLocked()
 }
 
+func (e *engine) isDualRunning() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.cmd != nil && e.cmd.Process != nil && e.cmd.Process.Signal(syscall.Signal(0)) == nil &&
+		e.cmd2 != nil && e.cmd2.Process != nil && e.cmd2.Process.Signal(syscall.Signal(0)) == nil
+}
+
+func (e *engine) activeSessionCount() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	count := 0
+	for _, cmd := range []*exec.Cmd{e.cmd, e.cmd2, e.cmd3} {
+		if cmd != nil && cmd.Process != nil && cmd.Process.Signal(syscall.Signal(0)) == nil {
+			count++
+		}
+	}
+	return count
+}
+
 func (e *engine) isRunningLocked() bool {
 	if e.cmd == nil || e.cmd.Process == nil {
 		return false
 	}
-	return e.cmd.Process.Signal(syscall.Signal(0)) == nil
+	if e.cmd.Process.Signal(syscall.Signal(0)) != nil {
+		return false
+	}
+	if e.cmd2 != nil && e.cmd2.Process != nil && e.cmd2.Process.Signal(syscall.Signal(0)) != nil {
+		return false
+	}
+	return e.cmd3 == nil || e.cmd3.Process == nil || e.cmd3.Process.Signal(syscall.Signal(0)) == nil
 }
 
 // supervise restarts the engine if it died while we are still connected.

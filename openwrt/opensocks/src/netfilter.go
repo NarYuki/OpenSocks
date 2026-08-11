@@ -30,7 +30,7 @@ const dynamicRouteTimeout = "30m"
 // second copy of the rules to a table another goroutine just created.
 var redirectMu sync.Mutex
 
-func setupRedirect(mode, proxyServer string) error {
+func setupRedirect(mode, proxyServer string, sessionCount int) error {
 	redirectMu.Lock()
 	defer redirectMu.Unlock()
 	cfg := readSettings()
@@ -48,10 +48,24 @@ func setupRedirect(mode, proxyServer string) error {
 	}
 
 	var script strings.Builder
+	tcpRedirect := fmt.Sprintf("redirect to :%d", mixedPort)
+	if sessionCount == 2 {
+		tcpRedirect = "numgen random mod 2 vmap { 0 : jump tcp_slot1, 1 : jump tcp_slot2 }"
+	} else if sessionCount >= 3 {
+		tcpRedirect = "numgen random mod 3 vmap { 0 : jump tcp_slot1, 1 : jump tcp_slot2, 2 : jump tcp_slot3 }"
+	}
 	script.WriteString("table inet opensocks {\n")
 	script.WriteString(" counter proxy_up {}\n counter proxy_down {}\n")
 	for _, group := range chinaServiceGroups {
 		script.WriteString(" counter svc_" + group.Name + "_up {}\n counter svc_" + group.Name + "_down {}\n")
+	}
+	script.WriteString(" counter svc_other_china_up {}\n counter svc_other_china_down {}\n")
+	if sessionCount >= 2 {
+		script.WriteString(fmt.Sprintf(" chain tcp_slot1 { meta l4proto tcp counter redirect to :%d; }\n", mixedPort))
+		script.WriteString(fmt.Sprintf(" chain tcp_slot2 { meta l4proto tcp counter redirect to :%d; }\n", dualPort))
+		if sessionCount >= 3 {
+			script.WriteString(fmt.Sprintf(" chain tcp_slot3 { meta l4proto tcp counter redirect to :%d; }\n", triplePort))
+		}
 	}
 	if mode != "global" {
 		script.WriteString(" set cn4 { type ipv4_addr; flags interval; auto-merge; elements = {\n")
@@ -75,12 +89,12 @@ func setupRedirect(mode, proxyServer string) error {
 		script.WriteString("  ip daddr " + serverIP + " return\n")
 	}
 	if mode == "global" {
-		script.WriteString(fmt.Sprintf("  meta l4proto tcp counter redirect to :%d\n", mixedPort))
+		script.WriteString("  meta l4proto tcp counter " + tcpRedirect + "\n")
 	} else {
 		script.WriteString("  ip daddr @exclude4 return\n")
-		script.WriteString(fmt.Sprintf("  ip daddr @domain4 meta l4proto tcp counter redirect to :%d\n", mixedPort))
-		script.WriteString(fmt.Sprintf("  ip daddr @include4 meta l4proto tcp counter redirect to :%d\n", mixedPort))
-		script.WriteString(fmt.Sprintf("  ip daddr @cn4 meta l4proto tcp counter redirect to :%d\n", mixedPort))
+		script.WriteString("  ip daddr @domain4 meta l4proto tcp counter " + tcpRedirect + "\n")
+		script.WriteString("  ip daddr @include4 meta l4proto tcp counter " + tcpRedirect + "\n")
+		script.WriteString("  ip daddr @cn4 meta l4proto tcp counter " + tcpRedirect + "\n")
 	}
 	script.WriteString(" }\n")
 	// ss-redir receives UDP through TPROXY. 王者荣耀 uses UDP for PVP, so
@@ -107,14 +121,20 @@ func setupRedirect(mode, proxyServer string) error {
 	}
 	if mode != "global" {
 		lan := detectLANDevice()
-		script.WriteString(" chain service_up { type filter hook input priority filter - 3; policy accept; iifname \"" + lan + "\" ")
+		script.WriteString(" chain service_up { type filter hook input priority filter - 3; policy accept;\n")
 		for _, group := range chinaServiceGroups {
-			script.WriteString("ct original ip daddr @svc_" + group.Name + "4 counter name svc_" + group.Name + "_up; ")
+			script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @svc_" + group.Name + "4 counter name svc_" + group.Name + "_up return\n")
 		}
-		script.WriteString("}\n chain service_down { type filter hook output priority filter - 3; policy accept; oifname \"" + lan + "\" ")
+		script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @domain4 counter name svc_other_china_up return\n")
+		script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @include4 counter name svc_other_china_up return\n")
+		script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @cn4 counter name svc_other_china_up\n")
+		script.WriteString("}\n chain service_down { type filter hook output priority filter - 3; policy accept;\n")
 		for _, group := range chinaServiceGroups {
-			script.WriteString("ct original ip daddr @svc_" + group.Name + "4 counter name svc_" + group.Name + "_down; ")
+			script.WriteString("  oifname \"" + lan + "\" ct original ip daddr @svc_" + group.Name + "4 counter name svc_" + group.Name + "_down return\n")
 		}
+		script.WriteString("  oifname \"" + lan + "\" ct original ip daddr @domain4 counter name svc_other_china_down return\n")
+		script.WriteString("  oifname \"" + lan + "\" ct original ip daddr @include4 counter name svc_other_china_down return\n")
+		script.WriteString("  oifname \"" + lan + "\" ct original ip daddr @cn4 counter name svc_other_china_down\n")
 		script.WriteString("}\n")
 	}
 	if serverIP != "" {
@@ -149,10 +169,10 @@ type serviceGroup struct {
 
 var chinaServiceGroups = []serviceGroup{
 	{"honor_of_kings", []string{"pvp.qq.com", "game.gtimg.cn", "dlied5.qq.com", "ossweb-img.qq.com", "sqimg.qq.com", "msdk.qq.com", "gcloud.qq.com", "tpns.tencent.com", "bugly.qq.com"}},
-	{"bilibili", []string{"bilibili.com", "www.bilibili.com", "api.bilibili.com", "app.bilibili.com", "live.bilibili.com", "bilivideo.com", "bilivideo.cn", "hdslb.com", "b23.tv", "biligame.com", "i.w.bilicdn1.com", "a.w.bilicdn1.com", "upos-hz-mirrorakam.akamaized.net", "upos-sz-mirrorcos.bilivideo.com", "upos-sz-mirrorali.bilivideo.com", "upos-sz-mirrorhw.bilivideo.com", "upos-sz-mirror08c.bilivideo.com", "upos-sz-mirroraliov.bilivideo.com"}},
+	{"bilibili", []string{"bilibili.com", "biliapi.com", "biliapi.net", "bilivideo.com", "bilivideo.cn", "bilicdn1.com", "bilicdn2.com", "hdslb.com", "b23.tv", "biligame.com", "acgvideo.com", "upos-hz-mirrorakam.akamaized.net"}},
 	{"baidu", []string{"baidu.com", "www.baidu.com", "m.baidu.com", "map.baidu.com", "hao123.com", "bdstatic.com", "bdimg.com", "bcebos.com", "baidubce.com", "baiducontent.com", "baidupcs.com"}},
-	{"qq_wechat", []string{"qq.com", "www.qq.com", "v.qq.com", "wx.qq.com", "gtimg.com", "qpic.cn", "qlogo.cn", "qqmail.com", "foxmail.com", "tencent.com", "myqcloud.com", "qcloud.com", "qcloudimg.com", "weixin.qq.com", "wechat.com", "wechatinc.com", "weixinbridge.com", "wechatpay.com", "tenpay.com"}},
-	{"alipay_alibaba", []string{"alipay.com", "www.alipay.com", "alipayobjects.com", "alipaydev.com", "antfin.com", "antgroup.com", "taobao.com", "www.taobao.com", "tmall.com", "1688.com", "etao.com", "alicdn.com", "alibaba.com", "aliyun.com", "aliyuncs.com", "alibabacloud.com"}},
+	{"qq_wechat", []string{"qq.com", "gtimg.com", "gtimg.cn", "qpic.cn", "qlogo.cn", "qzone.com", "qqmail.com", "foxmail.com", "tencent.com", "myqcloud.com", "qcloud.com", "qcloudimg.com", "weixin.qq.com", "weixin.com", "wechat.com", "wechatinc.com", "weixinbridge.com", "wechatpay.com", "tenpay.com", "wxapp.tc.qq.com"}},
+	{"alipay_alibaba", []string{"alipay.com", "alipayobjects.com", "alipaydev.com", "antfin.com", "antgroup.com", "taobao.com", "tmall.com", "1688.com", "etao.com", "alicdn.com", "alibaba.com", "aliyun.com", "aliyuncs.com", "alibabacloud.com", "mmstat.com", "tanx.com", "kunlunaq.com", "kunlungr.com"}},
 	{"games", []string{"mihoyo.com", "mhyurl.cn", "hoyolab.com", "yuanshen.com", "bh3.com", "benghuai.com", "game.qq.com", "ieg.com", "wegame.com.cn", "dnf.qq.com", "lol.qq.com", "pvp.qq.com", "neteasegames.com", "163yun.com", "xyq.163.com", "mc.163.com", "wanmei.com", "perfectworld.com.cn", "changyou.com", "cy.com", "shengqugames.com", "sdo.com", "biligame.com", "4399.com", "7k7k.com", "9game.cn"}},
 	{"video_music", []string{"iqiyi.com", "iqiyipic.com", "qiyi.com", "71.am", "youku.com", "youkucdn.com", "tudou.com", "qqvideo.com", "mgtv.com", "hunantv.com", "music.163.com", "126.net", "qqmusic.com", "tencentmusic.com", "kugou.com", "kuwo.cn", "douyu.com", "douyucdn.cn", "huya.com"}},
 	{"social", []string{"weibo.com", "weibo.cn", "sina.com.cn", "sinaimg.cn", "zhihu.com", "zhimg.com", "xiaohongshu.com", "xhscdn.com", "douyin.com", "douyincdn.com", "kuaishou.com", "kuaishoucdn.com", "douban.com", "doubanio.com", "acfun.cn", "acfun.com"}},
@@ -286,18 +306,8 @@ func cachedRoutingIPs(cfg *settings) ([]string, map[string][]string) {
 	}
 	wg.Wait()
 
-	// Shared CDN addresses belong to the first, most specific service only.
-	claimed := map[string]bool{}
-	for _, group := range chinaServiceGroups {
-		unique := services[group.Name][:0]
-		for _, ip := range services[group.Name] {
-			if !claimed[ip] {
-				claimed[ip] = true
-				unique = append(unique, ip)
-			}
-		}
-		services[group.Name] = unique
-	}
+	// Shared CDN addresses may legitimately serve multiple products. Preserve
+	// every association; ordered nft rules select one group per connection.
 	routingIPCache.key, routingIPCache.at = key, time.Now()
 	routingIPCache.domains = append([]string(nil), domains...)
 	routingIPCache.services = cloneServiceIPs(services)

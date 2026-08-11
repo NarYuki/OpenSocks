@@ -19,6 +19,7 @@ type settings struct {
 	FreeOnly       bool
 	AutoConnect    bool
 	AutoRoute      bool
+	SessionCount   int
 	Region         string
 	ExcludeRegions string
 	IncludeDomains string
@@ -48,6 +49,7 @@ func readSettings() *settings {
 		MobilePort:    9092,
 		GeoIPURL:      "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country.mmdb",
 		EngineBinary:  "/usr/bin/ss-redir",
+		SessionCount:  1,
 	}
 	s.Token = loadSession()
 	// One-time migration from releases that stored the session in UCI.
@@ -66,6 +68,12 @@ func readSettings() *settings {
 	s.FreeOnly = valueBool(values["free_only"], s.FreeOnly)
 	s.AutoConnect = valueBool(values["auto_connect"], s.AutoConnect)
 	s.AutoRoute = valueBool(values["auto_route"], s.AutoRoute)
+	if n, err := strconv.Atoi(values["session_count"]); err == nil && n >= 1 && n <= 3 {
+		s.SessionCount = n
+	} else if valueBool(values["dual_session_experimental"], false) {
+		// Compatibility with installations that enabled the former dual mode.
+		s.SessionCount = 2
+	}
 	s.Region = values["region"]
 	s.ExcludeRegions = values["exclude_regions"]
 	s.IncludeDomains = values["include_domains"]

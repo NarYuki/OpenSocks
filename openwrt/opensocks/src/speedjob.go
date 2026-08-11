@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,6 +16,9 @@ type speedJobState struct {
 	CurrentMbps  float64 `json:"current_mbps"`
 	DownloadMbps float64 `json:"download_mbps"`
 	UploadMbps   float64 `json:"upload_mbps"`
+	DualSession  bool    `json:"-"`
+	Streams      int     `json:"-"`
+	Sessions     int     `json:"sessions"`
 	Bytes        int64   `json:"bytes"`
 	Error        string  `json:"error,omitempty"`
 	StartedUnix  int64   `json:"started_unix"`
@@ -28,23 +32,58 @@ var speedJob = struct {
 	stageBytes int64
 }{}
 
-func startSpeedJob(provider, id string) error {
+var speedStreamLimit atomic.Int32
+var speedProgressBytes atomic.Int64
+var speedProgressUpdated atomic.Int64
+
+func startSpeedJob(provider, id string, streams int) error {
 	speedJob.Lock()
 	if speedJob.State.Running {
 		speedJob.Unlock()
 		return fmt.Errorf("a speed test is already running")
 	}
+	if streams == 0 {
+		if readSettings().SessionCount == 3 {
+			streams = 6
+		} else {
+			streams = 4
+		}
+	}
+	if streams < 1 || streams > 8 {
+		speedJob.Unlock()
+		return fmt.Errorf("speed test streams must be between 1 and 8")
+	}
+	speedStreamLimit.Store(int32(streams))
 	now := time.Now()
-	speedJob.State = speedJobState{Running: true, Provider: provider, ServerID: id, Stage: "preparing", StartedUnix: now.UnixMilli(), UpdatedUnix: now.UnixMilli()}
+	speedJob.State = speedJobState{Running: true, Provider: provider, ServerID: id, Stage: "preparing", Streams: streams, StartedUnix: now.UnixMilli(), UpdatedUnix: now.UnixMilli()}
 	speedJob.stageStart, speedJob.stageBytes = now, 0
 	speedJob.Unlock()
 	go runSpeedJob(provider, id)
 	return nil
 }
 
+func activeSpeedStreams() int {
+	n := int(speedStreamLimit.Load())
+	if n < 1 {
+		return 4
+	}
+	return n
+}
+
 func runSpeedJob(provider, id string) {
 	var result any
 	var err error
+	if readSettings().SessionCount == 3 && !fileExists(engineDir+"/config-3.yaml") {
+		err = prepareTripleSpeedSession()
+	}
+	if err != nil {
+		speedJob.Lock()
+		speedJob.State.Running = false
+		speedJob.State.Stage, speedJob.State.Error = "error", err.Error()
+		speedJob.State.UpdatedUnix = time.Now().UnixMilli()
+		speedJob.Unlock()
+		return
+	}
 	if provider == "speedtestcn" {
 		var servers []speedTestCNServer
 		servers, err = discoverSpeedTestCNServers()
@@ -56,6 +95,13 @@ func runSpeedJob(provider, id string) {
 					break
 				}
 			}
+		}
+	} else if provider == "ookla-external" {
+		server, ok := externalBenchmarkServers[id]
+		if !ok {
+			err = fmt.Errorf("external Ookla server %s not found", id)
+		} else {
+			result, err = runChinaSpeedTest(server)
 		}
 	} else {
 		var servers []speedServer
@@ -88,6 +134,8 @@ func runSpeedJob(provider, id string) {
 }
 
 func setSpeedStage(stage string) {
+	speedProgressBytes.Store(0)
+	speedProgressUpdated.Store(0)
 	speedJob.Lock()
 	if speedJob.State.Running {
 		if stage == "upload" && speedJob.State.Stage == "download" {
@@ -108,15 +156,42 @@ func setSpeedPing(ms float64) {
 	speedJob.Unlock()
 }
 
+func setSpeedDual(active bool) {
+	speedJob.Lock()
+	if speedJob.State.Running {
+		speedJob.State.DualSession = active
+		speedJob.State.UpdatedUnix = time.Now().UnixMilli()
+	}
+	speedJob.Unlock()
+}
+
+func setSpeedSessions(count int) {
+	speedJob.Lock()
+	if speedJob.State.Running {
+		speedJob.State.Sessions = count
+		speedJob.State.DualSession = count > 1
+		speedJob.State.UpdatedUnix = time.Now().UnixMilli()
+	}
+	speedJob.Unlock()
+}
+
 func addSpeedBytes(n int64) {
+	total := speedProgressBytes.Add(n)
+	nowMillis := time.Now().UnixMilli()
+	last := speedProgressUpdated.Load()
+	// Network readers can call this hundreds of times per second. Updating the
+	// UI faster than 20 Hz only adds mutex/time syscall overhead on MT7621.
+	if nowMillis-last < 50 || !speedProgressUpdated.CompareAndSwap(last, nowMillis) {
+		return
+	}
 	speedJob.Lock()
 	if speedJob.State.Running && (speedJob.State.Stage == "download" || speedJob.State.Stage == "upload") {
-		speedJob.stageBytes += n
+		speedJob.stageBytes = total
 		d := time.Since(speedJob.stageStart).Seconds()
 		if d > 0 {
 			speedJob.State.CurrentMbps = float64(speedJob.stageBytes) * 8 / d / 1e6
 		}
-		speedJob.State.Bytes, speedJob.State.UpdatedUnix = speedJob.stageBytes, time.Now().UnixMilli()
+		speedJob.State.Bytes, speedJob.State.UpdatedUnix = speedJob.stageBytes, nowMillis
 	}
 	speedJob.Unlock()
 }

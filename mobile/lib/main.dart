@@ -825,6 +825,7 @@ class _OverviewPageState extends State<OverviewPage> {
         'free_only': current['freeOnly'] == true,
         'auto_connect': current['autoConnect'] == true,
         'auto_route': current['autoRoute'] == true,
+        'session_count': current['sessionCount'] ?? 1,
         'region': current['region'] ?? '',
         'exclude_regions': current['excludeRegions'] ?? '',
         'include_domains': current['includeDomains'] ?? '',
@@ -973,6 +974,13 @@ class _OverviewPageState extends State<OverviewPage> {
               label: Text(x['lineName'] ?? c.l10n.selectServer),
             ),
           ),
+          if ((x['sessionCount'] ?? 1) > 1)
+            Center(
+              child: Chip(
+                avatar: const Icon(Icons.call_split_rounded, size: 17),
+                label: Text((x['sessionCount'] ?? 1) == 3 ? c.l10n.tripleMode : c.l10n.dualMode),
+              ),
+            ),
           const SizedBox(height: 28),
           Card(
             child: InkWell(
@@ -1589,7 +1597,11 @@ class _TrafficPageState extends State<TrafficPage> {
               children: [
                 for (var i = 0; i < services.length; i++) ...[
                   _TrafficServiceRow(
-                    name: services[i].key.replaceAll('_', ' / '),
+                    name: switch (services[i].key) {
+                      'honor_of_kings' => c.l10n.serviceHonorOfKings,
+                      'other_china' => c.l10n.serviceOtherChina,
+                      _ => services[i].key.replaceAll('_', ' '),
+                    },
                     up: bytes(services[i].value['up_bytes'] ?? 0),
                     down: bytes(services[i].value['down_bytes'] ?? 0),
                     total: bytes(services[i].value['total_bytes'] ?? 0),
@@ -1877,6 +1889,13 @@ class _TestsPageState extends State<TestsPage> {
                 ),
               ],
             ),
+            if ((p['sessions'] ?? 1) > 1) ...[
+              const SizedBox(height: 10),
+              Chip(
+                avatar: const Icon(Icons.call_split_rounded, size: 18),
+                label: Text((p['sessions'] ?? 1) == 3 ? c.l10n.tripleMode : c.l10n.dualMode),
+              ),
+            ],
             const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, constraints) {
@@ -2360,6 +2379,7 @@ class _SettingsPageState extends State<SettingsPage> {
       inCidrs = TextEditingController(),
       exCidrs = TextEditingController();
   String mode = 'smart';
+  int sessionCount = 1;
   bool free = true, auto = true, route = true, busy = false;
   @override
   void initState() {
@@ -2377,6 +2397,7 @@ class _SettingsPageState extends State<SettingsPage> {
           free = x['freeOnly'] ?? true;
           auto = x['autoConnect'] ?? true;
           route = x['autoRoute'] ?? true;
+          sessionCount = x['sessionCount'] ?? 1;
           region.text = x['region'] ?? '';
           exRegions.text = x['excludeRegions'] ?? '';
           inDomains.text = x['includeDomains'] ?? '';
@@ -2399,6 +2420,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'free_only': free,
         'auto_connect': auto,
         'auto_route': route,
+        'session_count': sessionCount,
         'region': region.text,
         'exclude_regions': exRegions.text,
         'include_domains': inDomains.text,
@@ -2436,6 +2458,19 @@ class _SettingsPageState extends State<SettingsPage> {
           title: const Text('Freeサーバーのみ'),
           value: free,
           onChanged: (v) => setState(() => free = v),
+        ),
+        DropdownButtonFormField<int>(
+          initialValue: sessionCount,
+          decoration: InputDecoration(
+            labelText: c.l10n.sessionMode,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            DropdownMenuItem(value: 1, child: Text(c.l10n.singleMode)),
+            DropdownMenuItem(value: 2, child: Text(c.l10n.dualMode)),
+            DropdownMenuItem(value: 3, child: Text(c.l10n.tripleMode)),
+          ],
+          onChanged: busy ? null : (v) => setState(() => sessionCount = v ?? 1),
         ),
         SwitchListTile(
           title: const Text('起動時に自動接続'),

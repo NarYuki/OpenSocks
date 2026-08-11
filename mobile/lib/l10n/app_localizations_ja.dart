@@ -244,4 +244,26 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get vipAccount => 'VIP ACCOUNT';
+
+  @override
+  String get singleMode => 'シングルモード';
+
+  @override
+  String get dualMode => 'デュアルモード';
+
+  @override
+  String get dualModeDescription =>
+      '2つの分離セッションを同じ中国サーバーへ接続し、複数のTCP通信を両回線へ分散します。';
+
+  @override
+  String get serviceHonorOfKings => '王者栄耀';
+
+  @override
+  String get serviceOtherChina => 'その他の中国通信';
+
+  @override
+  String get sessionMode => 'セッションモード';
+
+  @override
+  String get tripleMode => 'トリプルセッション';
 }

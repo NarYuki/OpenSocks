@@ -12,6 +12,7 @@ import (
 )
 
 const trafficStorePath = "/etc/opensocks/traffic.json"
+const serviceTrafficSchema = 2
 
 var allCountersRE = regexp.MustCompile(`(?s)counter ([a-zA-Z0-9_]+) \{.*?bytes ([0-9]+)`)
 
@@ -21,11 +22,12 @@ type serviceTraffic struct {
 	Total uint64 `json:"total_bytes"`
 }
 type persistedTraffic struct {
-	Up        uint64                     `json:"up_bytes"`
-	Down      uint64                     `json:"down_bytes"`
-	Total     uint64                     `json:"total_bytes"`
-	Services  map[string]*serviceTraffic `json:"services"`
-	UpdatedAt time.Time                  `json:"updated_at"`
+	Up            uint64                     `json:"up_bytes"`
+	Down          uint64                     `json:"down_bytes"`
+	Total         uint64                     `json:"total_bytes"`
+	Services      map[string]*serviceTraffic `json:"services"`
+	ServiceSchema int                        `json:"service_schema"`
+	UpdatedAt     time.Time                  `json:"updated_at"`
 }
 
 var trafficState struct {
@@ -40,6 +42,7 @@ func readNFTCounters() map[string]uint64 {
 	for _, g := range chinaServiceGroups {
 		commands.WriteString("list counter inet opensocks svc_" + g.Name + "_up\nlist counter inet opensocks svc_" + g.Name + "_down\n")
 	}
+	commands.WriteString("list counter inet opensocks svc_other_china_up\nlist counter inet opensocks svc_other_china_down\n")
 	cmd := exec.Command("nft", "-f", "-")
 	cmd.Stdin = strings.NewReader(commands.String())
 	out, err := cmd.Output()
@@ -61,6 +64,13 @@ func loadTrafficTotals() persistedTraffic {
 	}
 	if d.Services == nil {
 		d.Services = map[string]*serviceTraffic{}
+	}
+	// Older builds could omit traffic or assign a shared CDN address to the
+	// wrong service. Preserve the accurate overall total, but start the corrected
+	// service ranking from a clean generation once.
+	if d.ServiceSchema < serviceTrafficSchema {
+		d.Services = map[string]*serviceTraffic{}
+		d.ServiceSchema = serviceTrafficSchema
 	}
 	if d.Up+d.Down == 0 && d.Total > 0 {
 		d.Down = d.Total
@@ -98,6 +108,7 @@ func delta(current, previous uint64) uint64 {
 
 func startTrafficSampler() {
 	trafficState.Data = loadTrafficTotals()
+	saveTrafficTotals()
 	go func() {
 		previous := map[string]uint64{}
 		previousAt := time.Time{}
@@ -106,6 +117,13 @@ func startTrafficSampler() {
 		saveTicker := time.NewTicker(15 * time.Minute)
 		defer saveTicker.Stop()
 		for {
+			// nft on this 128 MB target can briefly consume several MiB. Avoid
+			// launching it beside two encrypted benchmark paths; counters remain
+			// in the kernel and are reconciled after the test completes.
+			if currentSpeedJob().Running {
+				time.Sleep(time.Second)
+				continue
+			}
 			now, current := time.Now(), readNFTCounters()
 			trafficState.Lock()
 			if !previousAt.IsZero() {
@@ -134,6 +152,14 @@ func startTrafficSampler() {
 					s.Down += delta(current["svc_"+g.Name+"_down"], previous["svc_"+g.Name+"_down"])
 					s.Total = s.Up + s.Down
 				}
+				s := trafficState.Data.Services["other_china"]
+				if s == nil {
+					s = &serviceTraffic{}
+					trafficState.Data.Services["other_china"] = s
+				}
+				s.Up += delta(current["svc_other_china_up"], previous["svc_other_china_up"])
+				s.Down += delta(current["svc_other_china_down"], previous["svc_other_china_down"])
+				s.Total = s.Up + s.Down
 			}
 			trafficState.Unlock()
 			previous, current, previousAt = current, nil, now

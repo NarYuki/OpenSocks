@@ -86,11 +86,11 @@ func (s *server) handleSpeedJobStart(w http.ResponseWriter, r *http.Request) {
 		Provider string `json:"provider"`
 		ID       string `json:"id"`
 	}
-	if decodeJSONBody(r.Body, &in) != nil || (in.Provider != "ookla" && in.Provider != "speedtestcn") || in.ID == "" {
+	if decodeJSONBody(r.Body, &in) != nil || (in.Provider != "ookla" && in.Provider != "ookla-external" && in.Provider != "speedtestcn") || in.ID == "" {
 		writeError(w, fmt.Errorf("invalid speed test job"))
 		return
 	}
-	if err := startSpeedJob(in.Provider, in.ID); err != nil {
+	if err := startSpeedJob(in.Provider, in.ID, 0); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -361,17 +361,19 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		wasRunning := s.ctl.engine.isRunning()
 		var in struct {
-			Mode           string `json:"mode"`
-			Tun            *bool  `json:"tun"`
-			FreeOnly       *bool  `json:"free_only"`
-			AutoConnect    *bool  `json:"auto_connect"`
-			AutoRoute      *bool  `json:"auto_route"`
-			Region         string `json:"region"`
-			ExcludeRegions string `json:"exclude_regions"`
-			IncludeDomains string `json:"include_domains"`
-			ExcludeDomains string `json:"exclude_domains"`
-			IncludeCIDRs   string `json:"include_cidrs"`
-			ExcludeCIDRs   string `json:"exclude_cidrs"`
+			Mode                    string `json:"mode"`
+			Tun                     *bool  `json:"tun"`
+			FreeOnly                *bool  `json:"free_only"`
+			AutoConnect             *bool  `json:"auto_connect"`
+			AutoRoute               *bool  `json:"auto_route"`
+			DualSessionExperimental *bool  `json:"dual_session_experimental"`
+			SessionCount            int    `json:"session_count"`
+			Region                  string `json:"region"`
+			ExcludeRegions          string `json:"exclude_regions"`
+			IncludeDomains          string `json:"include_domains"`
+			ExcludeDomains          string `json:"exclude_domains"`
+			IncludeCIDRs            string `json:"include_cidrs"`
+			ExcludeCIDRs            string `json:"exclude_cidrs"`
 		}
 		if err := decodeJSONBody(r.Body, &in); err != nil {
 			writeError(w, err)
@@ -392,6 +394,15 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if in.AutoRoute != nil {
 			updates["auto_route"] = boolStr(*in.AutoRoute)
+		}
+		if in.SessionCount >= 1 && in.SessionCount <= 3 {
+			updates["session_count"] = strconv.Itoa(in.SessionCount)
+		} else if in.DualSessionExperimental != nil {
+			if *in.DualSessionExperimental {
+				updates["session_count"] = "2"
+			} else {
+				updates["session_count"] = "1"
+			}
 		}
 		updates["region"] = in.Region
 		updates["exclude_regions"] = in.ExcludeRegions

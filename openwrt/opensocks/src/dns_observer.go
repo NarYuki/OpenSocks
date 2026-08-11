@@ -68,7 +68,7 @@ func observeDNSAnswers() {
 		}
 		names, ips := dnsIPv4Answers(buf[:n], trustedIP, trustedMAC)
 		if len(ips) > 0 {
-			if group := serviceForDNSNames(names); group != "" {
+			for _, group := range serviceGroupsForDNSNames(names) {
 				select {
 				case learned <- learning{group: group, ips: ips}:
 				default:
@@ -99,17 +99,37 @@ func lanIdentity(device string) (net.IP, net.HardwareAddr) {
 func htons(v uint16) uint16 { return v<<8 | v>>8 }
 
 func serviceForDNSNames(names []string) string {
+	groups := serviceGroupsForDNSNames(names)
+	if len(groups) > 0 {
+		return groups[0]
+	}
+	return ""
+}
+
+// A DNS response can contain a service hostname followed by one or more CDN
+// CNAMEs. Keep every matching service association; nftables applies the stable
+// group priority and counts the flow only once.
+func serviceGroupsForDNSNames(names []string) []string {
+	matched := make([]string, 0, 2)
 	for _, g := range chinaServiceGroups { // specific groups retain priority
+		found := false
 		for _, name := range names {
 			for _, suffix := range g.Domains {
 				n, s := strings.TrimSuffix(strings.ToLower(name), "."), strings.TrimPrefix(strings.ToLower(suffix), ".")
 				if n == s || strings.HasSuffix(n, "."+s) {
-					return g.Name
+					found = true
+					break
 				}
 			}
+			if found {
+				break
+			}
+		}
+		if found {
+			matched = append(matched, g.Name)
 		}
 	}
-	return ""
+	return matched
 }
 
 func flushLearnedDNS(pending map[string]map[string]bool) {

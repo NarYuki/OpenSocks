@@ -249,4 +249,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get vipAccount => 'VIP ACCOUNT';
+
+  @override
+  String get singleMode => 'Single mode';
+
+  @override
+  String get dualMode => 'Dual mode';
+
+  @override
+  String get dualModeDescription =>
+      'Connects two isolated sessions to the same China server and distributes concurrent TCP flows across both routes.';
+
+  @override
+  String get serviceHonorOfKings => 'Honor of Kings';
+
+  @override
+  String get serviceOtherChina => 'Other China traffic';
+
+  @override
+  String get sessionMode => 'Session mode';
+
+  @override
+  String get tripleMode => 'Triple mode';
 }

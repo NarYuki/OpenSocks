@@ -549,6 +549,48 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'VIP ACCOUNT'**
   String get vipAccount;
+
+  /// No description provided for @singleMode.
+  ///
+  /// In ja, this message translates to:
+  /// **'シングルモード'**
+  String get singleMode;
+
+  /// No description provided for @dualMode.
+  ///
+  /// In ja, this message translates to:
+  /// **'デュアルモード'**
+  String get dualMode;
+
+  /// No description provided for @dualModeDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'2つの分離セッションを同じ中国サーバーへ接続し、複数のTCP通信を両回線へ分散します。'**
+  String get dualModeDescription;
+
+  /// No description provided for @serviceHonorOfKings.
+  ///
+  /// In ja, this message translates to:
+  /// **'王者栄耀'**
+  String get serviceHonorOfKings;
+
+  /// No description provided for @serviceOtherChina.
+  ///
+  /// In ja, this message translates to:
+  /// **'その他の中国通信'**
+  String get serviceOtherChina;
+
+  /// No description provided for @sessionMode.
+  ///
+  /// In ja, this message translates to:
+  /// **'セッションモード'**
+  String get sessionMode;
+
+  /// No description provided for @tripleMode.
+  ///
+  /// In ja, this message translates to:
+  /// **'トリプルセッション'**
+  String get tripleMode;
 }
 
 class _AppLocalizationsDelegate

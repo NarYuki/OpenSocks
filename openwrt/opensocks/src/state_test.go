@@ -119,3 +119,27 @@ func TestHonorOfKingsDomainsIncludeSubdomains(t *testing.T) {
 		}
 	}
 }
+
+func TestBilibiliCDNDomainsIncludeAllSubdomains(t *testing.T) {
+	for _, name := range []string{
+		"api.biliapi.net",
+		"upos-sz-mirrorcos.bilivideo.com",
+		"i0.hdslb.com",
+		"static.bilicdn2.com",
+	} {
+		if got := serviceForDNSNames([]string{name}); got != "bilibili" {
+			t.Fatalf("serviceForDNSNames(%q) = %q, want bilibili", name, got)
+		}
+	}
+}
+
+func TestDNSResponseKeepsEveryMatchingService(t *testing.T) {
+	got := serviceGroupsForDNSNames([]string{"video.bilibili.com", "shared.alicdn.com"})
+	want := map[string]bool{"bilibili": true, "alipay_alibaba": true}
+	for _, group := range got {
+		delete(want, group)
+	}
+	if len(want) != 0 {
+		t.Fatalf("serviceGroupsForDNSNames() = %v, missing %v", got, want)
+	}
+}

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,13 @@ import (
 const ooklaServersURL = "https://www.speedtest.net/api/js/servers?engine=js&search=China&limit=30"
 const speedTestCNNodesURL = "https://nodes-api.speedtest.cn?type=multi&https=1&browser=1&domainType=2&use_cdn=1"
 const speedSOCKSPIDFile = "/tmp/opensocks/speedtest-ss-local.pid"
+const speedDualSOCKSPIDFile = "/tmp/opensocks/speedtest-ss-local-2.pid"
+const speedTripleSOCKSPIDFile = "/tmp/opensocks/speedtest-ss-local-3.pid"
+const speedDualSOCKSPort = 7893
+const speedTripleSOCKSPort = 7895
+
+var speedDualPath atomic.Bool
+var speedPathCount atomic.Int32
 
 type speedServer struct {
 	URL       string  `json:"url"`
@@ -174,6 +182,15 @@ var builtInChinaSpeedServers = []speedServer{
 	{URL: "http://speedtest.jsqiuying.com:8080/speedtest/upload.php", Name: "Suzhou", Country: "China", CC: "CN", Sponsor: "JSQY", ID: "16204", Host: "speedtest.jsqiuying.com:8080"},
 }
 
+var externalBenchmarkServers = map[string]speedServer{
+	"16176": {URL: "http://ookla-speedtest.hgconair.hgc.com.hk:8080/speedtest/upload.php", Name: "Sha Tin", Country: "Hong Kong", CC: "HK", Sponsor: "HGC", ID: "16176", Host: "ookla-speedtest.hgconair.hgc.com.hk:8080"},
+	"18475": {URL: "http://klv3-1.speedtest.idv.tw:8080/speedtest/upload.php", Name: "Keelung", Country: "Taiwan", CC: "TW", Sponsor: "Chief Telecom", ID: "18475", Host: "klv3-1.speedtest.idv.tw:8080"},
+	"48463": {URL: "http://speed.udx.icscoe.jp:8080/speedtest/upload.php", Name: "Tokyo", Country: "Japan", CC: "JP", Sponsor: "IPA CyberLab 400G", ID: "48463", Host: "speed.udx.icscoe.jp:8080"},
+	"70133": {URL: "http://speed.sparcs.net:8080/speedtest/upload.php", Name: "Daejeon", Country: "South Korea", CC: "KR", Sponsor: "SPARCS", ID: "70133", Host: "speed.sparcs.net.prod.hosts.ooklaserver.net:8080"},
+	"28910": {URL: "http://speedtest.hnd.fdcservers.net:8080/speedtest/upload.php", Name: "Tokyo", Country: "Japan", CC: "JP", Sponsor: "fdcservers.net", ID: "28910", Host: "speedtest.hnd.fdcservers.net:8080"},
+	"32155": {URL: "http://speedtest.hk.chinamobile.com:8080/speedtest/upload.php", Name: "Hong Kong", Country: "Hong Kong", CC: "HK", Sponsor: "CMHK Mobile Service", ID: "32155", Host: "speedtest.hk.chinamobile.com:8080"},
+}
+
 func fallbackChinaSpeedServers() []speedServer {
 	return append([]speedServer(nil), builtInChinaSpeedServers...)
 }
@@ -293,32 +310,43 @@ func discoverSpeedTestCNServers() ([]speedTestCNServer, error) {
 func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 	speedMu.Lock()
 	defer speedMu.Unlock()
-	cmd, err := startSpeedSOCKS()
+	cmds, dial, err := startSpeedSOCKSPool()
 	if err != nil {
 		return nil, err
 	}
-	defer stopSpeedSOCKS(cmd)
-	client := &http.Client{Transport: &http.Transport{
-		DialContext:         socksDial,
+	defer stopSpeedSOCKSPool(cmds)
+	tr := &http.Transport{
+		DialContext:         dial,
 		DisableCompression:  true,
-		MaxIdleConns:        8,
+		MaxIdleConns:        6,
 		MaxIdleConnsPerHost: 4,
 		IdleConnTimeout:     20 * time.Second,
-	}, Timeout: 12 * time.Second}
+	}
+	client := &http.Client{Transport: tr, Timeout: 12 * time.Second}
 	setSpeedStage("ping")
 	var ping float64
-	for i := 0; i < 3; i++ {
+	successes := 0
+	for attempt := 0; attempt < 6 && successes < 3; attempt++ {
 		st := time.Now()
-		r, e := client.Get(server.PingURL + "?r=" + fmt.Sprint(time.Now().UnixNano()))
+		pctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		req, _ := http.NewRequestWithContext(pctx, "GET", server.PingURL+"?r="+fmt.Sprint(time.Now().UnixNano()), nil)
+		r, e := client.Do(req)
+		cancel()
 		if e != nil {
-			return nil, e
+			tr.CloseIdleConnections()
+			continue
 		}
 		io.Copy(io.Discard, io.LimitReader(r.Body, 4096))
 		r.Body.Close()
 		ping += float64(time.Since(st).Microseconds()) / 1000
-		setSpeedPing(ping / float64(i+1))
+		successes++
+		setSpeedPing(ping / float64(successes))
+		tr.CloseIdleConnections()
 	}
-	ping /= 3
+	if successes == 0 {
+		return nil, fmt.Errorf("SpeedTest.cn server did not answer through any active session")
+	}
+	ping /= float64(successes)
 	setSpeedStage("download")
 	st := time.Now()
 	downloaded, lastStatus, downloadErr := parallelDownload(client, server.DownloadURL+"?size=25000000", 8*time.Second, 96<<20)
@@ -329,27 +357,10 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 		}
 		return nil, fmt.Errorf("SpeedTest.cn download returned HTTP %d with no data", lastStatus)
 	}
+	tr.CloseIdleConnections()
 	setSpeedStage("upload")
 	st = time.Now()
-	deadline := st.Add(5 * time.Second)
-	var uploaded int64
-	for time.Now().Before(deadline) && uploaded < 32<<20 {
-		body := &countingReader{R: io.LimitReader(zeroReader{}, 512<<10)}
-		uctx, stop := context.WithTimeout(context.Background(), 7*time.Second)
-		ureq, _ := http.NewRequestWithContext(uctx, "POST", server.UploadURL+"?r="+fmt.Sprint(time.Now().UnixNano()), body)
-		ureq.ContentLength = 512 << 10
-		ureq.Header.Set("Content-Type", "application/octet-stream")
-		ur, e := client.Do(ureq)
-		stop()
-		uploaded += body.N
-		if ur != nil {
-			io.Copy(io.Discard, io.LimitReader(ur.Body, 4096))
-			ur.Body.Close()
-		}
-		if e != nil && body.N == 0 {
-			break
-		}
-	}
+	uploaded := parallelUpload(client, server.UploadURL, "application/octet-stream", false, 5*time.Second, 32<<20)
 	ud := time.Since(st).Seconds()
 	if uploaded == 0 {
 		return nil, fmt.Errorf("SpeedTest.cn upload was rejected")
@@ -358,31 +369,87 @@ func runSpeedTestCN(server speedTestCNServer) (*speedTestCNResult, error) {
 }
 
 func startSpeedSOCKS() (*exec.Cmd, error) {
+	cmds, _, err := startSpeedSOCKSPoolWithDual(false)
+	if err != nil {
+		return nil, err
+	}
+	return cmds[0], nil
+}
+
+func startSpeedSOCKSPool() ([]*exec.Cmd, func(context.Context, string, string) (net.Conn, error), error) {
+	count := readSettings().SessionCount
+	dual := count >= 2 && fileExists(engineDir+"/config-2.yaml")
+	return startSpeedSOCKSPoolWithPaths(dual, count >= 3 && fileExists(engineDir+"/config-3.yaml"))
+}
+
+func startSpeedSOCKSPoolWithDual(dual bool) ([]*exec.Cmd, func(context.Context, string, string) (net.Conn, error), error) {
+	return startSpeedSOCKSPoolWithPaths(dual, false)
+}
+
+func startSpeedSOCKSPoolWithPaths(dual, triple bool) ([]*exec.Cmd, func(context.Context, string, string) (net.Conn, error), error) {
 	if _, err := exec.LookPath("ss-local"); err != nil {
-		return nil, fmt.Errorf("ss-local is required for China-route speed testing")
+		return nil, nil, fmt.Errorf("ss-local is required for China-route speed testing")
 	}
+	// This target has no swap and only 128 MB RAM. Return idle Go pages before
+	// starting two encrypted helpers and their HTTP socket buffers.
+	debug.FreeOSMemory()
 	cleanupStaleSpeedSOCKS()
-	cmd := exec.Command("ss-local", "-c", engineConf, "-b", "127.0.0.1", "-l", fmt.Sprint(socksPort), "-u")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		return nil, err
+	configs := []string{engineConf}
+	ports := []int{socksPort}
+	pidFiles := []string{speedSOCKSPIDFile}
+	if dual {
+		configs = append(configs, engineDir+"/config-2.yaml")
+		ports = append(ports, speedDualSOCKSPort)
+		pidFiles = append(pidFiles, speedDualSOCKSPIDFile)
 	}
-	if err := os.WriteFile(speedSOCKSPIDFile, []byte(strconv.Itoa(cmd.Process.Pid)), 0600); err != nil {
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
-		return nil, err
+	if triple {
+		configs = append(configs, engineDir+"/config-3.yaml")
+		ports = append(ports, speedTripleSOCKSPort)
+		pidFiles = append(pidFiles, speedTripleSOCKSPIDFile)
+	}
+	cmds := make([]*exec.Cmd, 0, len(configs))
+	for i := range configs {
+		// Speed tests are HTTP-only. Avoid allocating UDP relay state in both
+		// helpers on low-memory routers.
+		cmd := exec.Command("ss-local", "-c", configs[i], "-b", "127.0.0.1", "-l", fmt.Sprint(ports[i]))
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err := cmd.Start(); err != nil {
+			stopSpeedSOCKSPool(cmds)
+			return nil, nil, err
+		}
+		cmds = append(cmds, cmd)
+		if err := os.WriteFile(pidFiles[i], []byte(strconv.Itoa(cmd.Process.Pid)), 0600); err != nil {
+			stopSpeedSOCKSPool(cmds)
+			return nil, nil, err
+		}
 	}
 	time.Sleep(500 * time.Millisecond)
-	if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
-		stopSpeedSOCKS(cmd)
-		return nil, fmt.Errorf("China-route test helper stopped during startup")
+	for _, cmd := range cmds {
+		if err := cmd.Process.Signal(syscall.Signal(0)); err != nil {
+			stopSpeedSOCKSPool(cmds)
+			return nil, nil, fmt.Errorf("China-route test helper stopped during startup")
+		}
 	}
-	return cmd, nil
+	setSpeedDual(len(ports) > 1)
+	setSpeedSessions(len(ports))
+	speedDualPath.Store(len(ports) > 1)
+	speedPathCount.Store(int32(len(ports)))
+	var next atomic.Uint32
+	dial := func(ctx context.Context, network, address string) (net.Conn, error) {
+		port := ports[int(next.Add(1)-1)%len(ports)]
+		return socksDialPort(ctx, address, port)
+	}
+	return cmds, dial, nil
 }
 
 func cleanupStaleSpeedSOCKS() {
-	raw, err := os.ReadFile(speedSOCKSPIDFile)
+	cleanupSpeedSOCKSPID(speedSOCKSPIDFile)
+	cleanupSpeedSOCKSPID(speedDualSOCKSPIDFile)
+	cleanupSpeedSOCKSPID(speedTripleSOCKSPIDFile)
+}
+
+func cleanupSpeedSOCKSPID(pidFile string) {
+	raw, err := os.ReadFile(pidFile)
 	if err != nil {
 		return
 	}
@@ -395,7 +462,7 @@ func cleanupStaleSpeedSOCKS() {
 			}
 		}
 	}
-	_ = os.Remove(speedSOCKSPIDFile)
+	_ = os.Remove(pidFile)
 }
 
 func stopSpeedSOCKS(cmd *exec.Cmd) {
@@ -410,9 +477,25 @@ func stopSpeedSOCKS(cmd *exec.Cmd) {
 	}
 }
 
+func stopSpeedSOCKSPool(cmds []*exec.Cmd) {
+	for _, cmd := range cmds {
+		if cmd != nil && cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
+		}
+	}
+	_ = os.Remove(speedSOCKSPIDFile)
+	_ = os.Remove(speedDualSOCKSPIDFile)
+	_ = os.Remove(speedTripleSOCKSPIDFile)
+}
+
 func socksDial(ctx context.Context, network, address string) (net.Conn, error) {
+	return socksDialPort(ctx, address, socksPort)
+}
+
+func socksDialPort(ctx context.Context, address string, portNumber int) (net.Conn, error) {
 	d := net.Dialer{Timeout: 8 * time.Second}
-	c, err := d.DialContext(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", socksPort))
+	c, err := d.DialContext(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", portNumber))
 	if err != nil {
 		return nil, err
 	}
@@ -464,14 +547,14 @@ func socksDial(ctx context.Context, network, address string) (net.Conn, error) {
 func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 	speedMu.Lock()
 	defer speedMu.Unlock()
-	cmd, err := startSpeedSOCKS()
+	cmds, dial, err := startSpeedSOCKSPool()
 	if err != nil {
 		return nil, err
 	}
-	defer stopSpeedSOCKS(cmd)
+	defer stopSpeedSOCKSPool(cmds)
 	tr := &http.Transport{
-		DialContext:         socksDial,
-		MaxIdleConns:        8,
+		DialContext:         dial,
+		MaxIdleConns:        6,
 		MaxIdleConnsPerHost: 4,
 		IdleConnTimeout:     20 * time.Second,
 	}
@@ -479,18 +562,28 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 	base := strings.TrimSuffix(server.URL, "upload.php")
 	setSpeedStage("ping")
 	var ping float64
-	for i := 0; i < 3; i++ {
+	successes := 0
+	for attempt := 0; attempt < 6 && successes < 3; attempt++ {
 		st := time.Now()
-		r, e := client.Get(base + "latency.txt?x=" + fmt.Sprint(time.Now().UnixNano()))
+		pctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		req, _ := http.NewRequestWithContext(pctx, "GET", base+"latency.txt?x="+fmt.Sprint(time.Now().UnixNano()), nil)
+		r, e := client.Do(req)
+		cancel()
 		if e != nil {
-			return nil, e
+			tr.CloseIdleConnections()
+			continue
 		}
 		io.Copy(io.Discard, io.LimitReader(r.Body, 4096))
 		r.Body.Close()
 		ping += float64(time.Since(st).Microseconds()) / 1000
-		setSpeedPing(ping / float64(i+1))
+		successes++
+		setSpeedPing(ping / float64(successes))
+		tr.CloseIdleConnections()
 	}
-	ping /= 3
+	if successes == 0 {
+		return nil, fmt.Errorf("Ookla server did not answer through any active session")
+	}
+	ping /= float64(successes)
 	downloadURL := base + "random4000x4000.jpg?x=" + fmt.Sprint(time.Now().UnixNano())
 	setSpeedStage("download")
 	st := time.Now()
@@ -502,32 +595,49 @@ func runChinaSpeedTest(server speedServer) (*speedResult, error) {
 		}
 		return nil, fmt.Errorf("Ookla download test returned HTTP %d with no data; choose another China server", status)
 	}
+	tr.CloseIdleConnections()
 	setSpeedStage("upload")
 	st = time.Now()
-	deadline := st.Add(5 * time.Second)
-	var uploaded int64
-	for time.Now().Before(deadline) && uploaded < 32<<20 {
-		body := &countingReader{R: io.MultiReader(strings.NewReader("content1="), io.LimitReader(zeroReader{}, 512<<10))}
-		uctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
-		ureq, _ := http.NewRequestWithContext(uctx, "POST", server.URL, body)
-		ureq.ContentLength = (512 << 10) + 9
-		ureq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		ur, e := client.Do(ureq)
-		cancel()
-		uploaded += body.N
-		if ur != nil {
-			io.Copy(io.Discard, io.LimitReader(ur.Body, 4096))
-			ur.Body.Close()
-		}
-		if e != nil && body.N == 0 {
-			break
-		}
-	}
+	uploaded := parallelUpload(client, server.URL, "application/x-www-form-urlencoded", true, 5*time.Second, 32<<20)
 	ud := time.Since(st).Seconds()
 	if uploaded == 0 {
 		return nil, fmt.Errorf("Ookla upload test was rejected by server")
 	}
 	return &speedResult{Server: server, PingMS: ping, DownloadMbps: float64(downloaded) * 8 / dd / 1e6, UploadMbps: float64(uploaded) * 8 / ud / 1e6, BytesDownloaded: downloaded, BytesUploaded: uploaded}, nil
+}
+
+func parallelUpload(client *http.Client, rawURL, contentType string, form bool, duration time.Duration, limit int64) int64 {
+	ctx, cancel := context.WithTimeout(context.Background(), duration)
+	defer cancel()
+	var total atomic.Int64
+	var wg sync.WaitGroup
+	for worker := 0; worker < activeSpeedStreams(); worker++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for ctx.Err() == nil && total.Load() < limit {
+				var source io.Reader = io.LimitReader(zeroReader{}, 512<<10)
+				length := int64(512 << 10)
+				if form {
+					source = io.MultiReader(strings.NewReader("content1="), source)
+					length += 9
+				}
+				body := &countingReader{R: source}
+				req, _ := http.NewRequestWithContext(ctx, "POST", rawURL+"?stream="+strconv.Itoa(worker)+"&r="+fmt.Sprint(time.Now().UnixNano()), body)
+				req.ContentLength = length
+				req.Header.Set("Content-Type", contentType)
+				resp, _ := client.Do(req)
+				total.Add(body.N)
+				addSpeedBytes(body.N)
+				if resp != nil {
+					io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+					resp.Body.Close()
+				}
+			}
+		}(worker)
+	}
+	wg.Wait()
+	return total.Load()
 }
 
 type countingReader struct {
@@ -536,8 +646,8 @@ type countingReader struct {
 }
 
 // parallelDownload approximates the multi-connection behavior of desktop
-// speed-test clients without large buffers. Four 32 KiB buffers keep router
-// memory bounded while allowing high-latency China routes to fill the link.
+// speed-test clients without large buffers. Dual mode uses one 32 KiB reader
+// per session; single mode may use the configured number to fill a long path.
 func parallelDownload(client *http.Client, rawURL string, duration time.Duration, limit int64) (int64, int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
@@ -549,7 +659,13 @@ func parallelDownload(client *http.Client, rawURL string, duration time.Duration
 	if strings.Contains(rawURL, "?") {
 		separator = "&"
 	}
-	for worker := 0; worker < 4; worker++ {
+	workers := activeSpeedStreams()
+	// On dual paths BJ Unicom already saturates download with one stream per
+	// session. Extra readers increase cipher/HTTP scheduling without throughput.
+	if paths := int(speedPathCount.Load()); paths > 1 && workers > paths {
+		workers = paths
+	}
+	for worker := 0; worker < workers; worker++ {
 		wg.Add(1)
 		go func(worker int) {
 			defer wg.Done()
@@ -581,7 +697,6 @@ func parallelDownload(client *http.Client, rawURL string, duration time.Duration
 func (c *countingReader) Read(p []byte) (int, error) {
 	n, e := c.R.Read(p)
 	c.N += int64(n)
-	addSpeedBytes(int64(n))
 	return n, e
 }
 

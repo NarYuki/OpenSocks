@@ -28,22 +28,29 @@ const (
 )
 
 type apiClient struct {
-	domain    string
-	token     string
-	cookie    string
-	http      *http.Client
-	sleep     func(time.Duration)
-	stateMu   sync.RWMutex
-	requestMu sync.Mutex
+	domain       string
+	token        string
+	cookie       string
+	http         *http.Client
+	sleep        func(time.Duration)
+	stateMu      sync.RWMutex
+	requestMu    sync.Mutex
+	deviceSlot   int
+	legacyDevice bool
 }
 
 func newAPIClient(domain string) *apiClient {
+	return newAPIClientForSlot(domain, 0)
+}
+
+func newAPIClientForSlot(domain string, slot int) *apiClient {
 	u, err := url.Parse(domain)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && !isLoopbackHost(u.Hostname())) {
 		domain = "https://abscf2.fobwifi.com"
 	}
 	return &apiClient{
-		domain: strings.TrimRight(domain, "/"),
+		domain:     strings.TrimRight(domain, "/"),
+		deviceSlot: slot,
 		http: &http.Client{Timeout: 25 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Scheme != "https" && !isLoopbackHost(req.URL.Hostname()) {
 				return fmt.Errorf("refusing insecure API redirect")
@@ -117,11 +124,15 @@ type deviceParams struct {
 }
 
 func (c *apiClient) dev() deviceParams {
-	profile := persistentDeviceProfile()
+	profile := persistentDeviceProfileForSlot(c.deviceSlot)
+	mac, uuid := deviceIdentityForSlot(c.deviceSlot)
+	if c.legacyDevice {
+		mac, uuid = macAddr(), hashDeviceID()
+	}
 	return deviceParams{
 		Device:      "Android",
-		Mac:         macAddr(),
-		UUID:        hashDeviceID(),
+		Mac:         mac,
+		UUID:        uuid,
 		Langue:      "en",
 		PackageName: "com.fobwifi.normal",
 		AppVersion:  "4.4.4",
@@ -228,6 +239,20 @@ type line struct {
 
 type getLinesResponse struct {
 	Lines []line `json:"lines"`
+}
+
+type accountSession struct {
+	ActiveAt   int    `json:"active_at"`
+	AppVersion string `json:"app_version"`
+	Device     string `json:"device"`
+	Model      string `json:"model"`
+	Package    string `json:"package_name"`
+	Session    string `json:"session"`
+	MAC        string `json:"mac"`
+}
+
+type getSessionsResponse struct {
+	List []accountSession `json:"list"`
 }
 
 type connectRequest struct {
@@ -346,7 +371,8 @@ func (c *apiClient) doAuthenticated(method, path string, body any) ([]byte, erro
 			return raw, err
 		}
 		delay := time.Second << attempt
-		logf("authentication not ready; retrying %s %s in %s (%d/%d)", method, path, delay, attempt+2, attempts)
+		logPath := strings.SplitN(path, "?", 2)[0]
+		logf("authentication not ready; retrying %s %s in %s (%d/%d)", method, logPath, delay, attempt+2, attempts)
 		c.sleep(delay)
 	}
 }
@@ -451,7 +477,24 @@ func (c *apiClient) registerByDevice() (string, error) {
 }
 
 func (c *apiClient) login(req loginRequest) (string, error) {
-	raw, err := c.do("POST", "api/1/login", req)
+	// The original Android LoginRequest extends BaseRequest, so device fields
+	// are part of the login body as well as subsequent account requests.
+	body := c.dev().toMap()
+	encoded, err := json.Marshal(req)
+	if err != nil {
+		return "", err
+	}
+	var authFields map[string]any
+	if err := json.Unmarshal(encoded, &authFields); err != nil {
+		return "", err
+	}
+	for key, value := range authFields {
+		body[key] = value
+	}
+	if req.Autokick == nil {
+		body["autokick"] = 1
+	}
+	raw, err := c.do("POST", "api/1/login", body)
 	if err != nil {
 		return "", err
 	}
@@ -494,6 +537,26 @@ func (c *apiClient) getLines() ([]line, error) {
 		return nil, err
 	}
 	return resp.Lines, nil
+}
+
+func (c *apiClient) getSessions() ([]accountSession, error) {
+	q := c.dev().toQuery()
+	raw, err := c.doAuthenticated("GET", "api/1/user/sessions?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := decode[getSessionsResponse](raw)
+	if err != nil {
+		return nil, err
+	}
+	return resp.List, nil
+}
+
+func (c *apiClient) deleteSession(sessionID string) error {
+	body := c.dev().toMap()
+	body["session_id"] = sessionID
+	_, err := c.doAuthenticated("DELETE", "api/1/user/sessions", body)
+	return err
 }
 
 func (c *apiClient) connect(lineID int, req connectRequest) (*connectResponse, error) {

@@ -31,4 +31,11 @@
   "username": "Email / username", "password": "Password", "login": "Sign in",
   "anonymousRegister": "Register free account", "logout": "Sign out",
   "freeAccount": "FREE ACCOUNT", "vipAccount": "VIP ACCOUNT"
+  ,"singleMode": "Single mode",
+  "dualMode": "Dual mode",
+  "dualModeDescription": "Connects two isolated sessions to the same China server and distributes concurrent TCP flows across both routes.",
+  "serviceHonorOfKings": "Honor of Kings",
+  "serviceOtherChina": "Other China traffic"
+  ,"sessionMode": "Session mode"
+  ,"tripleMode": "Triple mode"
 }

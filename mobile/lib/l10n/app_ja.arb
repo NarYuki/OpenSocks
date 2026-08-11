@@ -32,4 +32,11 @@
   "loginManagement": "ログイン管理", "username": "メールアドレス / ユーザー名", "password": "パスワード",
   "login": "ログイン", "anonymousRegister": "匿名無料登録", "logout": "ログアウト",
   "freeAccount": "FREE ACCOUNT", "vipAccount": "VIP ACCOUNT"
+  ,"singleMode": "シングルモード",
+  "dualMode": "デュアルモード",
+  "dualModeDescription": "2つの分離セッションを同じ中国サーバーへ接続し、複数のTCP通信を両回線へ分散します。",
+  "serviceHonorOfKings": "王者栄耀",
+  "serviceOtherChina": "その他の中国通信"
+  ,"sessionMode": "セッションモード"
+  ,"tripleMode": "トリプルセッション"
 }

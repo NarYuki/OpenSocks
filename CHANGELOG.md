@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.2.6
+
+### Multi-session routing
+
+- Added Single, Dual, and Triple session modes as supported operating modes in LuCI and the mobile client.
+- Kept Single mode as the default for new installations while preserving the selected mode across service and router restarts.
+- Connected every active session to the selected Transocks line and distributed new China-bound TCP flows across two or three isolated routes with nftables.
+- Added active-session reporting to the control API and mode-aware status indicators to LuCI and the mobile client.
+- Preserved compatibility with installations that previously enabled the dual-session setting.
+
+### Speed testing
+
+- Made speed-test concurrency an internal implementation detail and automatically selected the tested stream count for each session mode.
+- Added three-session speed-test pooling with six internal transfer streams in Triple mode.
+- Improved the China-route benchmark connection pool, idle-connection cleanup, progress update frequency, and memory reclamation on low-memory routers.
+- Expanded Ookla endpoint selection and improved failure handling for SpeedTest.cn and external mainland test servers.
+
+### Traffic and routing
+
+- Expanded China-service classification and corrected service names in the traffic ranking.
+- Improved DNS observation and dynamic service-address tracking for subdomains and short-lived endpoints.
+- Added balanced two-way and three-way nftables TCP dispatch while retaining the primary session for UDP routing.
+- Paused background traffic sampling and route recovery during speed tests to reduce CPU and memory contention.
+
+### Reliability and validation
+
+- Added isolated persistent state for each active session and made multi-session login and connection setup failure-safe.
+- Improved connection retry behavior for transient Transocks authentication failures.
+- Passed Go unit tests, the race detector, `go vet`, MIPS soft-float cross-compilation, Flutter analysis, and Flutter tests.
+- Validated Single, Dual, and Triple modes on the target OpenWrt router; all sessions followed the selected server and produced the expected one-, two-, and three-way nftables rules.
+
 ## 0.2.2
 
 ### Security

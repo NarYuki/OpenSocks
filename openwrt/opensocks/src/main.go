@@ -13,8 +13,47 @@ var version = "dev"
 
 func main() {
 	daemon := flag.Bool("daemon", false, "run as daemon")
+	dualSessionProbe := flag.Bool("dual-session-probe", false, "experimentally verify two independent account sessions")
+	cleanupExperimentSessions := flag.Bool("cleanup-experiment-sessions", false, "remove only sessions created by the legacy dual-session probe")
+	recoverMainSession := flag.Bool("recover-main-session", false, "issue and persist the primary session using saved credentials")
+	deleteExternalSessions := flag.Bool("delete-external-device-sessions", false, "delete Android/iOS sessions that do not belong to an OpenSocks slot")
+	prepareTripleSpeed := flag.Bool("prepare-triple-speed-session", false, "issue an isolated third session for a temporary speed benchmark")
 	flag.Parse()
-
+	if *prepareTripleSpeed {
+		if err := prepareTripleSpeedSession(); err != nil {
+			fmt.Fprintf(os.Stderr, "third speed session failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *deleteExternalSessions {
+		if err := deleteExternalDeviceSessions(); err != nil {
+			fmt.Fprintf(os.Stderr, "external session cleanup failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *recoverMainSession {
+		if err := recoverPrimarySession(); err != nil {
+			fmt.Fprintf(os.Stderr, "primary session recovery failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *cleanupExperimentSessions {
+		if err := cleanupLegacyExperimentSessions(); err != nil {
+			fmt.Fprintf(os.Stderr, "experiment session cleanup failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *dualSessionProbe {
+		if err := runDualSessionProbe(); err != nil {
+			fmt.Fprintf(os.Stderr, "dual-session probe failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 	if *daemon {
 		runDaemon()
 		return
@@ -32,6 +71,7 @@ func runDaemon() {
 	cfg := readSettings()
 	ctl := newController(cfg)
 	cleanupStaleEngine()
+	cleanupStaleSpeedSOCKS()
 	startTrafficSampler()
 	go observeDNSAnswers()
 
@@ -58,6 +98,9 @@ func runDaemon() {
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for range ticker.C {
+			if currentSpeedJob().Running {
+				continue
+			}
 			ctl.refreshSettings()
 			if ctl.engine.isRunning() && ctl.currentSettings().Mode == "smart" {
 				refreshDomainRoutes()

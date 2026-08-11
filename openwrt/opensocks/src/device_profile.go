@@ -2,8 +2,8 @@ package main
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -29,34 +29,58 @@ var deviceProfiles = []deviceProfile{
 }
 
 var (
-	deviceProfileFile             = envOr("OPENSOCKS_STATE_DIR", "/etc/opensocks") + "/device_profile.json"
-	deviceProfileRandom io.Reader = rand.Reader
-	deviceProfileMu     sync.Mutex
-	cachedDeviceProfile *deviceProfile
+	deviceProfileDir               = envOr("OPENSOCKS_STATE_DIR", "/etc/opensocks")
+	deviceProfileRandom  io.Reader = rand.Reader
+	deviceProfileMu      sync.Mutex
+	cachedDeviceProfiles = map[int]deviceProfile{}
 )
 
-func persistentDeviceProfile() deviceProfile {
+func persistentDeviceProfileForSlot(slot int) deviceProfile {
+	if slot < 0 || slot > 2 {
+		slot = 0
+	}
 	deviceProfileMu.Lock()
 	defer deviceProfileMu.Unlock()
-	if cachedDeviceProfile != nil {
-		return *cachedDeviceProfile
+	if profile, ok := cachedDeviceProfiles[slot]; ok {
+		return profile
 	}
-	if profile, ok := readDeviceProfile(deviceProfileFile); ok {
-		cachedDeviceProfile = &profile
+	path := filepath.Join(deviceProfileDir, fmt.Sprintf("device_profile_%d.json", slot+1))
+	if profile, ok := readDeviceProfile(path); ok {
+		cachedDeviceProfiles[slot] = profile
 		return profile
 	}
 
+	used := map[deviceProfile]bool{}
+	for other := 0; other < 3; other++ {
+		if other == slot {
+			continue
+		}
+		if profile, ok := cachedDeviceProfiles[other]; ok {
+			used[profile] = true
+			continue
+		}
+		otherPath := filepath.Join(deviceProfileDir, fmt.Sprintf("device_profile_%d.json", other+1))
+		if profile, ok := readDeviceProfile(otherPath); ok {
+			used[profile] = true
+		}
+	}
+	candidates := make([]deviceProfile, 0, len(deviceProfiles))
+	for _, profile := range deviceProfiles {
+		if !used[profile] {
+			candidates = append(candidates, profile)
+		}
+	}
+	if len(candidates) == 0 {
+		candidates = deviceProfiles
+	}
 	var random [1]byte
 	index := 0
 	if _, err := io.ReadFull(deviceProfileRandom, random[:]); err == nil {
-		index = int(random[0]) % len(deviceProfiles)
-	} else {
-		fallback := sha256.Sum256([]byte(hashDeviceID()))
-		index = int(fallback[0]) % len(deviceProfiles)
+		index = int(random[0]) % len(candidates)
 	}
-	profile := deviceProfiles[index]
-	_ = writeDeviceProfile(deviceProfileFile, profile)
-	cachedDeviceProfile = &profile
+	profile := candidates[index]
+	_ = writeDeviceProfile(path, profile)
+	cachedDeviceProfiles[slot] = profile
 	return profile
 }
 

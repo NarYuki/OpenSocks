@@ -242,4 +242,25 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get vipAccount => 'VIP 账户';
+
+  @override
+  String get singleMode => '单会话模式';
+
+  @override
+  String get dualMode => '双会话模式';
+
+  @override
+  String get dualModeDescription => '将两个相互隔离的会话连接到同一中国服务器，并在两条线路之间分配并发TCP流量。';
+
+  @override
+  String get serviceHonorOfKings => '王者荣耀';
+
+  @override
+  String get serviceOtherChina => '其他中国流量';
+
+  @override
+  String get sessionMode => '会话模式';
+
+  @override
+  String get tripleMode => '三会话模式';
 }
