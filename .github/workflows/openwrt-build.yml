@@ -101,8 +101,10 @@ jobs:
           RELEASE_DIR: ${{ runner.temp }}/opensocks-release
         run: |
           case "$GITHUB_REF_NAME" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "Invalid release tag: $GITHUB_REF_NAME" >&2; exit 1;; esac
+          ./tools/release-notes.sh "$GITHUB_REF_NAME" > "${RUNNER_TEMP}/release-notes.md"
+          test -s "${RUNNER_TEMP}/release-notes.md"
           gh release create "$GITHUB_REF_NAME" "$RELEASE_DIR"/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --title "OpenSocks ${GITHUB_REF_NAME#v}" \
-            --generate-notes
+            --notes-file "${RUNNER_TEMP}/release-notes.md"
