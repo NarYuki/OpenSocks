@@ -380,7 +380,7 @@ func (e *engine) startConnections(connections ...*connectResponse) error {
 	}
 	e.cmd = cmd
 	if len(connections) >= 2 {
-		e.cmd2, err = startOne(connections[1], dualPort, engineDir+"/config-2.yaml", false)
+		e.cmd2, err = startOne(connections[1], dualPort, engineDir+"/config-2.yaml", true)
 		if err != nil {
 			_ = e.cmd.Process.Signal(syscall.SIGTERM)
 			e.cmd.Wait()
@@ -393,7 +393,7 @@ func (e *engine) startConnections(connections ...*connectResponse) error {
 		_ = os.Remove(engineDir + "/config-2.yaml")
 	}
 	if len(connections) >= 3 {
-		e.cmd3, err = startOne(connections[2], triplePort, engineDir+"/config-3.yaml", false)
+		e.cmd3, err = startOne(connections[2], triplePort, engineDir+"/config-3.yaml", true)
 		if err != nil {
 			if e.cmd2 != nil {
 				_ = e.cmd2.Process.Signal(syscall.SIGTERM)

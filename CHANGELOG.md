@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.8
+
+### Multi-session UDP routing
+
+- Enabled UDP forwarding on every active session in Dual and Triple modes.
+- Added symmetric flow hashing so each UDP flow remains pinned to one session while separate flows are distributed across the available sessions.
+- Kept the same policy-routing mark on every UDP slot so all selected flows use the existing TPROXY route safely.
+- Validated two- and three-session UDP listeners and nftables rules on the target OpenWrt router.
+- Verified with LAN traffic that 18 independent flows were distributed across all three sessions and that ten packets from one flow remained on a single session.
+
 ## 0.2.7
 
 ### Mobile interface

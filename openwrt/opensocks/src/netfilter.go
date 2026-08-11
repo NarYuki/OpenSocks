@@ -49,10 +49,13 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 
 	var script strings.Builder
 	tcpRedirect := fmt.Sprintf("redirect to :%d", mixedPort)
+	udpRedirect := fmt.Sprintf("meta mark set 0x51 tproxy ip to :%d accept", mixedPort)
 	if sessionCount == 2 {
 		tcpRedirect = "numgen random mod 2 vmap { 0 : jump tcp_slot1, 1 : jump tcp_slot2 }"
+		udpRedirect = "symhash mod 2 vmap { 0 : jump udp_slot1, 1 : jump udp_slot2 }"
 	} else if sessionCount >= 3 {
 		tcpRedirect = "numgen random mod 3 vmap { 0 : jump tcp_slot1, 1 : jump tcp_slot2, 2 : jump tcp_slot3 }"
+		udpRedirect = "symhash mod 3 vmap { 0 : jump udp_slot1, 1 : jump udp_slot2, 2 : jump udp_slot3 }"
 	}
 	script.WriteString("table inet opensocks {\n")
 	script.WriteString(" counter proxy_up {}\n counter proxy_down {}\n")
@@ -65,6 +68,11 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		script.WriteString(fmt.Sprintf(" chain tcp_slot2 { meta l4proto tcp counter redirect to :%d; }\n", dualPort))
 		if sessionCount >= 3 {
 			script.WriteString(fmt.Sprintf(" chain tcp_slot3 { meta l4proto tcp counter redirect to :%d; }\n", triplePort))
+		}
+		script.WriteString(fmt.Sprintf(" chain udp_slot1 { meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept; }\n", mixedPort))
+		script.WriteString(fmt.Sprintf(" chain udp_slot2 { meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept; }\n", dualPort))
+		if sessionCount >= 3 {
+			script.WriteString(fmt.Sprintf(" chain udp_slot3 { meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept; }\n", triplePort))
 		}
 	}
 	if mode != "global" {
@@ -106,12 +114,12 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		script.WriteString("  ip daddr " + serverIP + " return\n")
 	}
 	if mode == "global" {
-		script.WriteString(fmt.Sprintf("  meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
+		script.WriteString("  meta l4proto udp counter " + udpRedirect + "\n")
 	} else {
 		script.WriteString("  ip daddr @exclude4 return\n")
-		script.WriteString(fmt.Sprintf("  ip daddr @domain4 meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
-		script.WriteString(fmt.Sprintf("  ip daddr @include4 meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
-		script.WriteString(fmt.Sprintf("  ip daddr @cn4 meta l4proto udp counter meta mark set 0x51 tproxy ip to :%d accept\n", mixedPort))
+		script.WriteString("  ip daddr @domain4 meta l4proto udp counter " + udpRedirect + "\n")
+		script.WriteString("  ip daddr @include4 meta l4proto udp counter " + udpRedirect + "\n")
+		script.WriteString("  ip daddr @cn4 meta l4proto udp counter " + udpRedirect + "\n")
 	}
 	script.WriteString(" }\n")
 	if mode != "global" {
