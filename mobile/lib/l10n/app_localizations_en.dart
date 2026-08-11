@@ -270,5 +270,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sessionMode => 'Session mode';
 
   @override
+  String get apply => 'Apply';
+
+  @override
   String get tripleMode => 'Triple mode';
 }

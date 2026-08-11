@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.7
+
+### Mobile interface
+
+- Unified Smart/Full China routing and Single/Dual/Triple session selection in one routing-mode sheet.
+- Displayed the selected routing mode and session mode together on the home routing card.
+- Applied both selections in one network reconfiguration and removed the duplicate session selector from Settings.
+
 ## 0.2.6
 
 ### Multi-session routing

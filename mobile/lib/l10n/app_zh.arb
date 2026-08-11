@@ -36,6 +36,7 @@
   "dualModeDescription": "将两个相互隔离的会话连接到同一中国服务器，并在两条线路之间分配并发TCP流量。",
   "serviceHonorOfKings": "王者荣耀",
   "serviceOtherChina": "其他中国流量"
-  ,"sessionMode": "会话模式"
+  ,"sessionMode": "会话模式",
+  "apply": "应用"
   ,"tripleMode": "三会话模式"
 }

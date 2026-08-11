@@ -36,6 +36,7 @@
   "dualModeDescription": "Connects two isolated sessions to the same China server and distributes concurrent TCP flows across both routes.",
   "serviceHonorOfKings": "Honor of Kings",
   "serviceOtherChina": "Other China traffic"
-  ,"sessionMode": "Session mode"
+  ,"sessionMode": "Session mode",
+  "apply": "Apply"
   ,"tripleMode": "Triple mode"
 }

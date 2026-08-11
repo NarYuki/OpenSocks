@@ -744,66 +744,114 @@ class _OverviewPageState extends State<OverviewPage> {
 
   Future<void> chooseRoutingMode() async {
     if (busy || s == null) return;
-    final current = s!['mode'] == 'global' ? 'global' : 'smart';
+    final currentMode = s!['mode'] == 'global' ? 'global' : 'smart';
+    final currentSessions = (s!['sessionCount'] as num?)?.toInt() ?? 1;
     widget.onOverlayVisibilityChanged(true);
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
       widget.onOverlayVisibilityChanged(false);
       return;
     }
-    String? selected;
+    Map<String, dynamic>? selected;
+    var selectedMode = currentMode;
+    var selectedSessions = currentSessions;
     try {
-      selected = await showModalBottomSheet<String>(
+      selected = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
         useSafeArea: true,
         showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  sheetContext.l10n.routingMode,
-                  style: Theme.of(
-                    sheetContext,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        builder: (sheetContext) => StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return SafeArea(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        sheetContext.l10n.routingMode,
+                        style: Theme.of(sheetContext).textTheme.titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 8),
+                      ListTile(
+                        selected: selectedMode == 'smart',
+                        title: Text(sheetContext.l10n.smartRouting),
+                        subtitle: Text(sheetContext.l10n.smartDescription),
+                        leading: const Icon(Icons.alt_route_rounded),
+                        trailing: selectedMode == 'smart'
+                            ? const Icon(Icons.check_circle_rounded)
+                            : null,
+                        onTap: () =>
+                            setSheetState(() => selectedMode = 'smart'),
+                      ),
+                      ListTile(
+                        selected: selectedMode == 'global',
+                        title: Text(sheetContext.l10n.globalRouting),
+                        subtitle: Text(sheetContext.l10n.globalDescription),
+                        leading: const Icon(Icons.public_rounded),
+                        trailing: selectedMode == 'global'
+                            ? const Icon(Icons.check_circle_rounded)
+                            : null,
+                        onTap: () =>
+                            setSheetState(() => selectedMode = 'global'),
+                      ),
+                      const Divider(),
+                      Text(
+                        sheetContext.l10n.sessionMode,
+                        style: Theme.of(sheetContext).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      for (final option in [
+                        (1, sheetContext.l10n.singleMode),
+                        (2, sheetContext.l10n.dualMode),
+                        (3, sheetContext.l10n.tripleMode),
+                      ])
+                        ListTile(
+                          selected: selectedSessions == option.$1,
+                          leading: Icon(
+                            option.$1 == 1
+                                ? Icons.looks_one_rounded
+                                : option.$1 == 2
+                                ? Icons.looks_two_rounded
+                                : Icons.looks_3_rounded,
+                          ),
+                          title: Text(option.$2),
+                          trailing: selectedSessions == option.$1
+                              ? const Icon(Icons.check_circle_rounded)
+                              : null,
+                          onTap: () =>
+                              setSheetState(() => selectedSessions = option.$1),
+                        ),
+                      const SizedBox(height: 8),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(sheetContext, {
+                          'mode': selectedMode,
+                          'sessions': selectedSessions,
+                        }),
+                        child: Text(sheetContext.l10n.apply),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-                ListTile(
-                  selected: current == 'smart',
-                  title: Text(sheetContext.l10n.smartRouting),
-                  subtitle: Text(sheetContext.l10n.smartDescription),
-                  leading: const Icon(Icons.alt_route_rounded),
-                  trailing: current == 'smart'
-                      ? const Icon(Icons.check_circle_rounded)
-                      : null,
-                  onTap: () => Navigator.pop(sheetContext, 'smart'),
-                ),
-                ListTile(
-                  selected: current == 'global',
-                  title: Text(sheetContext.l10n.globalRouting),
-                  subtitle: Text(sheetContext.l10n.globalDescription),
-                  leading: const Icon(Icons.public_rounded),
-                  trailing: current == 'global'
-                      ? const Icon(Icons.check_circle_rounded)
-                      : null,
-                  onTap: () => Navigator.pop(sheetContext, 'global'),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       );
     } finally {
       widget.onOverlayVisibilityChanged(false);
     }
-    if (selected == null || selected == current || !mounted) return;
-    await applyRoutingMode(selected);
+    if (selected == null || !mounted) return;
+    final mode = selected['mode'] as String;
+    final sessions = selected['sessions'] as int;
+    if (mode == currentMode && sessions == currentSessions) return;
+    await applyRoutingMode(mode, sessions);
   }
 
-  Future<void> applyRoutingMode(String mode) async {
+  Future<void> applyRoutingMode(String mode, int sessionCount) async {
     final current = s!;
     final l = context.l10n;
     setState(() {
@@ -825,7 +873,7 @@ class _OverviewPageState extends State<OverviewPage> {
         'free_only': current['freeOnly'] == true,
         'auto_connect': current['autoConnect'] == true,
         'auto_route': current['autoRoute'] == true,
-        'session_count': current['sessionCount'] ?? 1,
+        'session_count': sessionCount,
         'region': current['region'] ?? '',
         'exclude_regions': current['excludeRegions'] ?? '',
         'include_domains': current['includeDomains'] ?? '',
@@ -974,13 +1022,6 @@ class _OverviewPageState extends State<OverviewPage> {
               label: Text(x['lineName'] ?? c.l10n.selectServer),
             ),
           ),
-          if ((x['sessionCount'] ?? 1) > 1)
-            Center(
-              child: Chip(
-                avatar: const Icon(Icons.call_split_rounded, size: 17),
-                label: Text((x['sessionCount'] ?? 1) == 3 ? c.l10n.tripleMode : c.l10n.dualMode),
-              ),
-            ),
           const SizedBox(height: 28),
           Card(
             child: InkWell(
@@ -1007,9 +1048,11 @@ class _OverviewPageState extends State<OverviewPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            x['mode'] == 'global'
-                                ? c.l10n.globalRouting
-                                : c.l10n.smartRouting,
+                            '${x['mode'] == 'global' ? c.l10n.globalRouting : c.l10n.smartRouting} · ${(x['sessionCount'] ?? 1) == 3
+                                ? c.l10n.tripleMode
+                                : (x['sessionCount'] ?? 1) == 2
+                                ? c.l10n.dualMode
+                                : c.l10n.singleMode}',
                             style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 3),
@@ -1893,7 +1936,11 @@ class _TestsPageState extends State<TestsPage> {
               const SizedBox(height: 10),
               Chip(
                 avatar: const Icon(Icons.call_split_rounded, size: 18),
-                label: Text((p['sessions'] ?? 1) == 3 ? c.l10n.tripleMode : c.l10n.dualMode),
+                label: Text(
+                  (p['sessions'] ?? 1) == 3
+                      ? c.l10n.tripleMode
+                      : c.l10n.dualMode,
+                ),
               ),
             ],
             const SizedBox(height: 16),
@@ -2379,7 +2426,6 @@ class _SettingsPageState extends State<SettingsPage> {
       inCidrs = TextEditingController(),
       exCidrs = TextEditingController();
   String mode = 'smart';
-  int sessionCount = 1;
   bool free = true, auto = true, route = true, busy = false;
   @override
   void initState() {
@@ -2397,7 +2443,6 @@ class _SettingsPageState extends State<SettingsPage> {
           free = x['freeOnly'] ?? true;
           auto = x['autoConnect'] ?? true;
           route = x['autoRoute'] ?? true;
-          sessionCount = x['sessionCount'] ?? 1;
           region.text = x['region'] ?? '';
           exRegions.text = x['excludeRegions'] ?? '';
           inDomains.text = x['includeDomains'] ?? '';
@@ -2420,7 +2465,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'free_only': free,
         'auto_connect': auto,
         'auto_route': route,
-        'session_count': sessionCount,
+        'session_count': s?['sessionCount'] ?? 1,
         'region': region.text,
         'exclude_regions': exRegions.text,
         'include_domains': inDomains.text,
@@ -2458,19 +2503,6 @@ class _SettingsPageState extends State<SettingsPage> {
           title: const Text('Freeサーバーのみ'),
           value: free,
           onChanged: (v) => setState(() => free = v),
-        ),
-        DropdownButtonFormField<int>(
-          initialValue: sessionCount,
-          decoration: InputDecoration(
-            labelText: c.l10n.sessionMode,
-            border: const OutlineInputBorder(),
-          ),
-          items: [
-            DropdownMenuItem(value: 1, child: Text(c.l10n.singleMode)),
-            DropdownMenuItem(value: 2, child: Text(c.l10n.dualMode)),
-            DropdownMenuItem(value: 3, child: Text(c.l10n.tripleMode)),
-          ],
-          onChanged: busy ? null : (v) => setState(() => sessionCount = v ?? 1),
         ),
         SwitchListTile(
           title: const Text('起動時に自動接続'),

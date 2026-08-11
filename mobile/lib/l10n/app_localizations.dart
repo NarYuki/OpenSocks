@@ -586,6 +586,12 @@ abstract class AppLocalizations {
   /// **'セッションモード'**
   String get sessionMode;
 
+  /// No description provided for @apply.
+  ///
+  /// In ja, this message translates to:
+  /// **'適用'**
+  String get apply;
+
   /// No description provided for @tripleMode.
   ///
   /// In ja, this message translates to:

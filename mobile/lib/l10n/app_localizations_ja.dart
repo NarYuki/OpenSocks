@@ -265,5 +265,8 @@ class AppLocalizationsJa extends AppLocalizations {
   String get sessionMode => 'セッションモード';
 
   @override
+  String get apply => '適用';
+
+  @override
   String get tripleMode => 'トリプルセッション';
 }

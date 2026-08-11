@@ -262,5 +262,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sessionMode => '会话模式';
 
   @override
+  String get apply => '应用';
+
+  @override
   String get tripleMode => '三会话模式';
 }

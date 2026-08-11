@@ -37,6 +37,7 @@
   "dualModeDescription": "2つの分離セッションを同じ中国サーバーへ接続し、複数のTCP通信を両回線へ分散します。",
   "serviceHonorOfKings": "王者栄耀",
   "serviceOtherChina": "その他の中国通信"
-  ,"sessionMode": "セッションモード"
+  ,"sessionMode": "セッションモード",
+  "apply": "適用"
   ,"tripleMode": "トリプルセッション"
 }
