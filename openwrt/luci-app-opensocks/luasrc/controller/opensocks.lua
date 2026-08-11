@@ -186,6 +186,7 @@ function action_settings()
             free_only = req.free_only,
             auto_connect = req.auto_connect,
             auto_route = req.auto_route,
+            session_count = tonumber(req.session_count),
             region = req.region,
             exclude_regions = req.exclude_regions,
             include_domains = req.include_domains,

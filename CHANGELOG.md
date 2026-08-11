@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.9
+
+### Routing controls
+
+- Fixed the mobile routing sheet dropping Smart/Full China and Single/Dual/Triple changes while restoring the native navigation bar.
+- Kept the routing operation active after the sheet closes so authentication, network configuration, interface processing, completion, and errors remain visible on the main screen.
+- Fixed the LuCI proxy omitting `session_count` from settings requests.
+- Prevented LuCI status polling from replacing edited routing values while a settings request is running.
+- Kept the selected routing and session modes after service and full-router restarts.
+
+### Validation
+
+- Added mobile widget coverage for successful mode changes, API failure recovery, navigation restoration, request ordering, and updated home-card status.
+- Added a LuCI controller test that verifies routing mode and session count reach the daemon payload.
+- Validated all six Smart/Full China and Single/Dual/Triple combinations through the live router API.
+- Validated packaged LuCI changes through the authenticated CGI endpoint and restored Smart/Dual operation afterward.
+- Passed Go tests, the race detector, `go vet`, MIPS soft-float compilation, Flutter analysis/tests, Android release build, and an iOS device release build without using a simulator.
+
 ## 0.2.8
 
 ### Multi-session UDP routing

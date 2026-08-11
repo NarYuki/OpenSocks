@@ -841,14 +841,14 @@ class _OverviewPageState extends State<OverviewPage> {
           },
         ),
       );
+      if (selected == null || !mounted) return;
+      final mode = selected['mode'] as String;
+      final sessions = selected['sessions'] as int;
+      if (mode == currentMode && sessions == currentSessions) return;
+      await applyRoutingMode(mode, sessions);
     } finally {
       widget.onOverlayVisibilityChanged(false);
     }
-    if (selected == null || !mounted) return;
-    final mode = selected['mode'] as String;
-    final sessions = selected['sessions'] as int;
-    if (mode == currentMode && sessions == currentSessions) return;
-    await applyRoutingMode(mode, sessions);
   }
 
   Future<void> applyRoutingMode(String mode, int sessionCount) async {
