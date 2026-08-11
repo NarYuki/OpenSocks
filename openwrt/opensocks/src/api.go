@@ -117,8 +117,9 @@ type deviceParams struct {
 }
 
 func (c *apiClient) dev() deviceParams {
+	profile := persistentDeviceProfile()
 	return deviceParams{
-		Device:      "phone",
+		Device:      "Android",
 		Mac:         macAddr(),
 		UUID:        hashDeviceID(),
 		Langue:      "en",
@@ -126,9 +127,9 @@ func (c *apiClient) dev() deviceParams {
 		AppVersion:  "4.4.4",
 		Org:         "transocks_mix",
 		Channel:     "google",
-		WidthHeight: "1080x2400",
-		SysVersion:  "24",
-		Model:       "OpenWrt",
+		WidthHeight: profile.WidthHeight,
+		SysVersion:  profile.SysVersion,
+		Model:       profile.Model,
 	}
 }
 

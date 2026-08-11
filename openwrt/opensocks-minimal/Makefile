@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=opensocks-minimal
-PKG_VERSION:=0.2.2
+PKG_VERSION:=0.2.5
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-3.0-or-later
 
