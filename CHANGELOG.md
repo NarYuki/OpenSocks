@@ -10,14 +10,6 @@
 - Prevented LuCI status polling from replacing edited routing values while a settings request is running.
 - Kept the selected routing and session modes after service and full-router restarts.
 
-### Validation
-
-- Added mobile widget coverage for successful mode changes, API failure recovery, navigation restoration, request ordering, and updated home-card status.
-- Added a LuCI controller test that verifies routing mode and session count reach the daemon payload.
-- Validated all six Smart/Full China and Single/Dual/Triple combinations through the live router API.
-- Validated packaged LuCI changes through the authenticated CGI endpoint and restored Smart/Dual operation afterward.
-- Passed Go tests, the race detector, `go vet`, MIPS soft-float compilation, Flutter analysis/tests, Android release build, and an iOS device release build without using a simulator.
-
 ## 0.2.8
 
 ### Multi-session UDP routing
@@ -25,8 +17,6 @@
 - Enabled UDP forwarding on every active session in Dual and Triple modes.
 - Added symmetric flow hashing so each UDP flow remains pinned to one session while separate flows are distributed across the available sessions.
 - Kept the same policy-routing mark on every UDP slot so all selected flows use the existing TPROXY route safely.
-- Validated two- and three-session UDP listeners and nftables rules on the target OpenWrt router.
-- Verified with LAN traffic that 18 independent flows were distributed across all three sessions and that ten packets from one flow remained on a single session.
 
 ## 0.2.7
 
@@ -48,7 +38,7 @@
 
 ### Speed testing
 
-- Made speed-test concurrency an internal implementation detail and automatically selected the tested stream count for each session mode.
+- Automatically selected the speed-test stream count for each session mode.
 - Added three-session speed-test pooling with six internal transfer streams in Triple mode.
 - Improved the China-route benchmark connection pool, idle-connection cleanup, progress update frequency, and memory reclamation on low-memory routers.
 - Expanded Ookla endpoint selection and improved failure handling for SpeedTest.cn and external mainland test servers.
@@ -60,12 +50,10 @@
 - Added balanced two-way and three-way nftables TCP dispatch while retaining the primary session for UDP routing.
 - Paused background traffic sampling and route recovery during speed tests to reduce CPU and memory contention.
 
-### Reliability and validation
+### Reliability
 
 - Added isolated persistent state for each active session and made multi-session login and connection setup failure-safe.
 - Improved connection retry behavior for transient Transocks authentication failures.
-- Passed Go unit tests, the race detector, `go vet`, MIPS soft-float cross-compilation, Flutter analysis, and Flutter tests.
-- Validated Single, Dual, and Triple modes on the target OpenWrt router; all sessions followed the selected server and produced the expected one-, two-, and three-way nftables rules.
 
 ## 0.2.2
 
@@ -91,15 +79,9 @@
 - Added HTTP client/server timeouts and bounded concurrent request handling.
 - Fixed races in API authentication state, settings refresh, and server switching.
 - Corrected JSON error response headers.
-- Verified downloaded China route data before applying nftables rules.
+- Rejected invalid China route data before applying nftables rules.
 - Fixed immutable `by-sha` opkg URLs on HTTP servers that reject symbolic links.
 
 ### Distribution
 
 - Published signed full, minimal, and LuCI packages through GitHub Releases and `rel.n4t.su`.
-- Verified `Packages`, `SHA256SUMS`, and their usign signatures before publication.
-
-### Validation
-
-- Passed Go unit tests, `go vet`, the race detector, MIPS soft-float cross-compilation, Flutter analysis, and Flutter tests.
-- Validated the signed minimal package and smart-routing nftables configuration on the target OpenWrt router.
