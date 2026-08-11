@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,9 +17,16 @@ class OpenSocksApiException implements Exception {
 }
 
 class OpenSocksApi {
-  OpenSocksApi(this.baseUrl, this.token);
+  OpenSocksApi(this.baseUrl, this.token) {
+    _client.connectionTimeout = const Duration(seconds: 8);
+    _client.idleTimeout = const Duration(seconds: 30);
+    _client.maxConnectionsPerHost = 4;
+  }
   final String baseUrl;
   final String token;
+  final HttpClient _client = HttpClient();
+
+  void close() => _client.close(force: true);
 
   Future<Map<String, dynamic>> request(
     String path, {
@@ -26,19 +34,29 @@ class OpenSocksApi {
     Map<String, dynamic>? body,
     int timeout = 35,
   }) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
     try {
       final uri = Uri.parse(
         '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/${path.replaceAll(RegExp(r'^/+'), '')}',
       );
-      final req = await client
+      final req = await _client
           .openUrl(method, uri)
           .timeout(Duration(seconds: timeout));
       req.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       req.headers.contentType = ContentType.json;
       if (body != null) req.write(jsonEncode(body));
       final res = await req.close().timeout(Duration(seconds: timeout));
-      final text = await utf8.decoder.bind(res).join();
+      const maxResponseBytes = 2 << 20;
+      if (res.contentLength > maxResponseBytes) {
+        throw const OpenSocksApiException(OpenSocksApiErrorKind.response);
+      }
+      final output = BytesBuilder(copy: false);
+      await for (final chunk in res) {
+        if (output.length + chunk.length > maxResponseBytes) {
+          throw const OpenSocksApiException(OpenSocksApiErrorKind.response);
+        }
+        output.add(chunk);
+      }
+      final text = utf8.decode(output.takeBytes());
       dynamic decoded;
       try {
         decoded = jsonDecode(text);
@@ -70,8 +88,6 @@ class OpenSocksApi {
       throw const OpenSocksApiException(OpenSocksApiErrorKind.connection);
     } on HandshakeException {
       throw const OpenSocksApiException(OpenSocksApiErrorKind.connection);
-    } finally {
-      client.close(force: true);
     }
   }
 

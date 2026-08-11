@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // server exposes the local control API used by the LuCI app.
@@ -23,7 +24,32 @@ func newServer(ctl *controller) *server {
 }
 
 func (s *server) listenAndServe(port int) error {
-	return http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", port), s.routes())
+	return serveHTTP(fmt.Sprintf("127.0.0.1:%d", port), s.routes())
+}
+
+func serveHTTP(address string, handler http.Handler) error {
+	limit := make(chan struct{}, 32)
+	guarded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case limit <- struct{}{}:
+			defer func() { <-limit }()
+		default:
+			http.Error(w, "server busy", http.StatusServiceUnavailable)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		handler.ServeHTTP(w, r)
+	})
+	server := &http.Server{
+		Addr:              address,
+		Handler:           guarded,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      2 * time.Minute,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+	}
+	return server.ListenAndServe()
 }
 
 func (s *server) routes() http.Handler {
@@ -73,7 +99,7 @@ func (s *server) handleSpeedJobStart(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) listenAndServeMobile(port int, token string) error {
 	routes := s.routes()
-	return http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return serveHTTP(fmt.Sprintf("0.0.0.0:%d", port), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		provided := r.Header.Get("Authorization")
 		want := "Bearer " + token
 		if len(provided) != len(want) || subtle.ConstantTimeCompare([]byte(provided), []byte(want)) != 1 {
@@ -351,27 +377,29 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, err)
 			return
 		}
+		updates := map[string]string{}
 		if in.Mode == "smart" || in.Mode == "global" {
-			saveSetting("mode", in.Mode)
+			updates["mode"] = in.Mode
 		}
 		if in.Tun != nil {
-			saveSetting("tun", boolStr(*in.Tun))
+			updates["tun"] = boolStr(*in.Tun)
 		}
 		if in.FreeOnly != nil {
-			saveSetting("free_only", boolStr(*in.FreeOnly))
+			updates["free_only"] = boolStr(*in.FreeOnly)
 		}
 		if in.AutoConnect != nil {
-			saveSetting("auto_connect", boolStr(*in.AutoConnect))
+			updates["auto_connect"] = boolStr(*in.AutoConnect)
 		}
 		if in.AutoRoute != nil {
-			saveSetting("auto_route", boolStr(*in.AutoRoute))
+			updates["auto_route"] = boolStr(*in.AutoRoute)
 		}
-		saveSetting("region", in.Region)
-		saveSetting("exclude_regions", in.ExcludeRegions)
-		saveSetting("include_domains", in.IncludeDomains)
-		saveSetting("exclude_domains", in.ExcludeDomains)
-		saveSetting("include_cidrs", in.IncludeCIDRs)
-		saveSetting("exclude_cidrs", in.ExcludeCIDRs)
+		updates["region"] = in.Region
+		updates["exclude_regions"] = in.ExcludeRegions
+		updates["include_domains"] = in.IncludeDomains
+		updates["exclude_domains"] = in.ExcludeDomains
+		updates["include_cidrs"] = in.IncludeCIDRs
+		updates["exclude_cidrs"] = in.ExcludeCIDRs
+		saveSettings(updates)
 		s.ctl.refreshSettings()
 		if wasRunning {
 			if err := s.ctl.disconnect(); err != nil {
@@ -415,8 +443,9 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 func writeError(w http.ResponseWriter, err error) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusBadGateway)
-	writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+	json.NewEncoder(w).Encode(map[string]any{"ok": false, "error": err.Error()})
 }
 
 func boolStr(b bool) string {

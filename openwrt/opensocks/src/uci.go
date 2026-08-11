@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -34,6 +35,7 @@ type settings struct {
 }
 
 func readSettings() *settings {
+	values := uciSnapshot()
 	s := &settings{
 		Mode:          "smart",
 		Tun:           true,
@@ -49,7 +51,7 @@ func readSettings() *settings {
 	}
 	s.Token = loadSession()
 	// One-time migration from releases that stored the session in UCI.
-	if legacy := uciGet("token"); legacy != "" {
+	if legacy := values["token"]; legacy != "" {
 		if s.Token != "" {
 			uciDelete("token")
 		} else if err := saveSession(legacy); err == nil {
@@ -57,40 +59,40 @@ func readSettings() *settings {
 			uciDelete("token")
 		}
 	}
-	if v := uciGet("mode"); v != "" {
+	if v := values["mode"]; v != "" {
 		s.Mode = v
 	}
-	s.Tun = uciBool("tun", s.Tun)
-	s.FreeOnly = uciBool("free_only", s.FreeOnly)
-	s.AutoConnect = uciBool("auto_connect", s.AutoConnect)
-	s.AutoRoute = uciBool("auto_route", s.AutoRoute)
-	s.Region = uciGet("region")
-	s.ExcludeRegions = uciGet("exclude_regions")
-	s.IncludeDomains = uciGet("include_domains")
-	s.ExcludeDomains = uciGet("exclude_domains")
-	s.IncludeCIDRs = uciGet("include_cidrs")
-	s.ExcludeCIDRs = uciGet("exclude_cidrs")
-	if v := uciGet("selected_line_id"); v != "" {
+	s.Tun = valueBool(values["tun"], s.Tun)
+	s.FreeOnly = valueBool(values["free_only"], s.FreeOnly)
+	s.AutoConnect = valueBool(values["auto_connect"], s.AutoConnect)
+	s.AutoRoute = valueBool(values["auto_route"], s.AutoRoute)
+	s.Region = values["region"]
+	s.ExcludeRegions = values["exclude_regions"]
+	s.IncludeDomains = values["include_domains"]
+	s.ExcludeDomains = values["exclude_domains"]
+	s.IncludeCIDRs = values["include_cidrs"]
+	s.ExcludeCIDRs = values["exclude_cidrs"]
+	if v := values["selected_line_id"]; v != "" {
 		s.SelectedLineID, _ = strconv.Atoi(v)
 	}
-	if v := uciGet("api_domain"); v != "" {
+	if v := values["api_domain"]; v != "" {
 		s.APIDomain = v
 	}
-	if v := uciGet("control_port"); v != "" {
+	if v := values["control_port"]; v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			s.ControlPort = n
 		}
 	}
-	s.MobileEnabled = uciBool("mobile_enabled", s.MobileEnabled)
-	if v := uciGet("mobile_port"); v != "" {
+	s.MobileEnabled = valueBool(values["mobile_enabled"], s.MobileEnabled)
+	if v := values["mobile_port"]; v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n < 65536 && n != s.ControlPort {
 			s.MobilePort = n
 		}
 	}
-	if v := uciGet("geoip_url"); v != "" {
+	if v := values["geoip_url"]; v != "" {
 		s.GeoIPURL = v
 	}
-	if v := uciGet("engine_binary"); v != "" {
+	if v := values["engine_binary"]; v != "" {
 		s.EngineBinary = v
 	}
 	return s
@@ -114,6 +116,36 @@ func saveSetting(key, value string) {
 	uciSet(key, value)
 }
 
+func saveSettings(values map[string]string) {
+	for key, value := range values {
+		exec.Command("uci", "-q", "set", uciRoot+"."+key+"="+value).Run()
+	}
+	exec.Command("uci", "-q", "commit", "opensocks").Run()
+}
+
+func uciSnapshot() map[string]string {
+	out, err := exec.Command("uci", "-q", "show", uciRoot).Output()
+	if err != nil {
+		return map[string]string{}
+	}
+	values := map[string]string{}
+	prefix := uciRoot + "."
+	for _, line := range bytes.Split(out, []byte{'\n'}) {
+		parts := bytes.SplitN(line, []byte{'='}, 2)
+		if len(parts) != 2 || !bytes.HasPrefix(parts[0], []byte(prefix)) {
+			continue
+		}
+		key := strings.TrimPrefix(string(parts[0]), prefix)
+		value := string(parts[1])
+		if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+			value = value[1 : len(value)-1]
+			value = strings.ReplaceAll(value, "'\\''", "'")
+		}
+		values[key] = value
+	}
+	return values
+}
+
 func uciGet(option string) string {
 	out, err := exec.Command("uci", "-q", "get", uciRoot+"."+option).Output()
 	if err != nil {
@@ -130,7 +162,10 @@ func uciSet(option, value string) {
 }
 
 func uciBool(option string, def bool) bool {
-	v := uciGet(option)
+	return valueBool(uciGet(option), def)
+}
+
+func valueBool(v string, def bool) bool {
 	if v == "" {
 		return def
 	}

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -27,11 +28,13 @@ const (
 )
 
 type apiClient struct {
-	domain string
-	token  string
-	cookie string
-	http   *http.Client
-	sleep  func(time.Duration)
+	domain    string
+	token     string
+	cookie    string
+	http      *http.Client
+	sleep     func(time.Duration)
+	stateMu   sync.RWMutex
+	requestMu sync.Mutex
 }
 
 func newAPIClient(domain string) *apiClient {
@@ -58,7 +61,45 @@ func isLoopbackHost(host string) bool {
 	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
-func (c *apiClient) setToken(t string) { c.token = t }
+func (c *apiClient) setToken(t string) {
+	c.stateMu.Lock()
+	c.token = t
+	c.stateMu.Unlock()
+}
+
+func (c *apiClient) clearAuth() {
+	c.stateMu.Lock()
+	c.token, c.cookie = "", ""
+	c.stateMu.Unlock()
+}
+
+func (c *apiClient) configure(domain, fallbackSession string) {
+	u, err := url.Parse(domain)
+	if err != nil || u.Host == "" || (u.Scheme != "https" && !isLoopbackHost(u.Hostname())) {
+		domain = "https://abscf2.fobwifi.com"
+	}
+	c.stateMu.Lock()
+	c.domain = strings.TrimRight(domain, "/")
+	if fallbackSession != "" {
+		c.token = fallbackSession
+		if c.cookie == "" {
+			c.cookie = fallbackSession
+		}
+	}
+	c.stateMu.Unlock()
+}
+
+func (c *apiClient) hasAuth() bool {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.cookie != "" || c.token != ""
+}
+
+func (c *apiClient) authValues() (string, string) {
+	c.stateMu.RLock()
+	defer c.stateMu.RUnlock()
+	return c.token, c.cookie
+}
 
 // deviceParams are the BaseRequest fields the server validates.
 type deviceParams struct {
@@ -237,6 +278,8 @@ type connectResponse struct {
 // --- helpers ------------------------------------------------------------
 
 func (c *apiClient) do(method, path string, body any) ([]byte, error) {
+	c.requestMu.Lock()
+	defer c.requestMu.Unlock()
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -252,16 +295,19 @@ func (c *apiClient) do(method, path string, body any) ([]byte, error) {
 			logf("debug: %s %s body=%s", method, path, debugBody)
 		}
 	}
-	req, err := http.NewRequest(method, c.domain+"/"+path, rd)
+	c.stateMu.RLock()
+	domain, token, cookie := c.domain, c.token, c.cookie
+	c.stateMu.RUnlock()
+	req, err := http.NewRequest(method, domain+"/"+path, rd)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", headerContentType)
-	if c.token != "" {
-		req.Header.Set(headerAuth, c.token)
+	if token != "" {
+		req.Header.Set(headerAuth, token)
 	}
-	if c.cookie != "" {
-		req.Header.Set(headerCookie, sessionCookie+"="+c.cookie)
+	if cookie != "" {
+		req.Header.Set(headerCookie, sessionCookie+"="+cookie)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
@@ -274,7 +320,9 @@ func (c *apiClient) do(method, path string, body any) ([]byte, error) {
 	}
 	if sc := resp.Header.Get("Set-Cookie"); sc != "" {
 		if v := extractCookie(sc, sessionCookie); v != "" {
+			c.stateMu.Lock()
 			c.cookie = v
+			c.stateMu.Unlock()
 		}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -391,7 +439,7 @@ func (c *apiClient) registerByDevice() (string, error) {
 		return "", err
 	}
 	if resp.Token != nil && resp.Token.AccessToken != "" {
-		c.token = resp.Token.AccessToken
+		c.setToken(resp.Token.AccessToken)
 		return resp.Token.AccessToken, nil
 	}
 	// device accounts: username+password, then login
@@ -410,10 +458,12 @@ func (c *apiClient) login(req loginRequest) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if c.cookie == "" && resp.Token != nil && resp.Token.AccessToken != "" {
-		c.token = resp.Token.AccessToken
+	_, cookie := c.authValues()
+	if cookie == "" && resp.Token != nil && resp.Token.AccessToken != "" {
+		c.setToken(resp.Token.AccessToken)
 	}
-	if c.cookie == "" && c.token == "" {
+	token, cookie := c.authValues()
+	if cookie == "" && token == "" {
 		return "", fmt.Errorf("login: no session cookie issued (check credentials)")
 	}
 	// persist account summary for the web UI
@@ -425,7 +475,10 @@ func (c *apiClient) login(req loginRequest) (string, error) {
 		ExpireAt:      resp.ExpireAt,
 		RemainingDays: resp.RemainingDays,
 	})
-	return c.cookie, nil
+	if cookie != "" {
+		return cookie, nil
+	}
+	return token, nil
 }
 
 func (c *apiClient) getLines() ([]line, error) {

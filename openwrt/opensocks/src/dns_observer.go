@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
-	"os/exec"
 	"strings"
 	"syscall"
 	"time"
@@ -32,6 +31,10 @@ func observeDNSAnswers() {
 	}
 	defer syscall.Close(fd)
 	_ = syscall.SetsockoptString(fd, syscall.SOL_SOCKET, soBindToDevice, device)
+	if err := attachDNSResponseFilter(fd); err != nil {
+		logf("dns observer disabled because the kernel filter could not be attached: %v", err)
+		return
+	}
 
 	type learning struct {
 		group string
@@ -110,7 +113,7 @@ func serviceForDNSNames(names []string) string {
 }
 
 func flushLearnedDNS(pending map[string]map[string]bool) {
-	var batch strings.Builder
+	sets := map[string][]string{}
 	for group, values := range pending {
 		if len(values) == 0 {
 			continue
@@ -119,14 +122,10 @@ func flushLearnedDNS(pending map[string]map[string]bool) {
 		for ip := range values {
 			ips = append(ips, ip)
 		}
-		batch.WriteString("add element inet opensocks domain4 { " + strings.Join(ips, ", ") + " }\n")
-		batch.WriteString("add element inet opensocks svc_" + group + "4 { " + strings.Join(ips, ", ") + " }\n")
+		sets["domain4"] = append(sets["domain4"], ips...)
+		sets["svc_"+group+"4"] = append(sets["svc_"+group+"4"], ips...)
 	}
-	if batch.Len() > 0 {
-		cmd := exec.Command("nft", "-f", "-")
-		cmd.Stdin = strings.NewReader(batch.String())
-		_ = cmd.Run()
-	}
+	addDynamicElements(sets)
 }
 
 func dnsIPv4Answers(frame []byte, trustedIP net.IP, trustedMAC net.HardwareAddr) ([]string, []string) {

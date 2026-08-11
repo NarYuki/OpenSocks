@@ -67,6 +67,7 @@ type controller struct {
 	cfg       *settings
 	authMu    sync.Mutex
 	connectMu sync.Mutex
+	cfgMu     sync.RWMutex
 	linesMu   sync.RWMutex
 	lines     []line
 	lastAuth  time.Time
@@ -81,19 +82,28 @@ func newController(cfg *settings) *controller {
 }
 
 func (c *controller) refreshSettings() {
-	c.cfg = readSettings()
-	c.api.domain = c.cfg.APIDomain
-	if c.cfg.Token != "" {
-		c.api.token = c.cfg.Token
-		if c.api.cookie == "" {
-			c.api.cookie = c.cfg.Token
-		}
-	}
+	config := readSettings()
+	c.cfgMu.Lock()
+	c.cfg = config
+	c.cfgMu.Unlock()
+	c.api.configure(config.APIDomain, config.Token)
+}
+
+func (c *controller) currentSettings() settings {
+	c.cfgMu.RLock()
+	defer c.cfgMu.RUnlock()
+	return *c.cfg
+}
+
+func (c *controller) setSessionToken(token string) {
+	c.cfgMu.Lock()
+	c.cfg.Token = token
+	c.cfgMu.Unlock()
 }
 
 // loggedIn reports whether we hold a usable session (cookie or legacy token).
 func (c *controller) loggedIn() bool {
-	return c.api.cookie != "" || c.api.token != "" || c.cfg.Token != ""
+	return c.api.hasAuth() || c.currentSettings().Token != ""
 }
 
 // --- auth ------------------------------------------------------------------
@@ -105,7 +115,7 @@ func (c *controller) registerByDevice() (string, error) {
 		return "", err
 	}
 	saveToken(token)
-	c.cfg.Token = token
+	c.setSessionToken(token)
 	return token, nil
 }
 
@@ -144,8 +154,7 @@ func (c *controller) login(in loginInput) (string, error) {
 		in.AuthType = "password"
 	}
 	// force a fresh session: ignore any stale stored token
-	c.api.cookie = ""
-	c.api.token = ""
+	c.api.clearAuth()
 	session, err := c.api.login(loginRequest{
 		AuthBy:   in.AuthBy,
 		AuthType: in.AuthType,
@@ -167,15 +176,14 @@ func (c *controller) login(in loginInput) (string, error) {
 	}
 	saveToken(session)
 	c.lastAuth = time.Now()
-	c.cfg.Token = session
+	c.setSessionToken(session)
 	return session, nil
 }
 
 func (c *controller) logout() {
-	c.api.token = ""
-	c.api.cookie = ""
+	c.api.clearAuth()
 	saveToken("")
-	c.cfg.Token = ""
+	c.setSessionToken("")
 	saveAccount(nil)
 	if err := saveCredentials(nil); err != nil && !errors.Is(err, os.ErrNotExist) {
 		logf("warning: could not remove saved credentials: %v", err)
@@ -193,8 +201,7 @@ func (c *controller) reauthenticate() error {
 		return fmt.Errorf("session expired and no saved credentials are available: %w", err)
 	}
 	logf("session expired; automatically renewing the saved session")
-	c.api.cookie = ""
-	c.api.token = ""
+	c.api.clearAuth()
 	session, err := c.api.login(loginRequest{
 		AuthBy: creds.AuthBy, AuthType: creds.AuthType, Username: creds.Username,
 		Password: creds.Password, Email: creds.Email, Phone: creds.Phone, CC: creds.CC,
@@ -204,7 +211,7 @@ func (c *controller) reauthenticate() error {
 	}
 	saveToken(session)
 	c.lastAuth = time.Now()
-	c.cfg.Token = session
+	c.setSessionToken(session)
 	return nil
 }
 
@@ -250,6 +257,7 @@ type lineInfo struct {
 }
 
 func (c *controller) listLines(sortBy string) ([]lineInfo, error) {
+	cfg := c.currentSettings()
 	lines, err := c.getLinesAuthenticated()
 	if err != nil {
 		if isAPIErrorCode(err, 20001) {
@@ -271,13 +279,13 @@ func (c *controller) listLines(sortBy string) ([]lineInfo, error) {
 		if vip && l.IsFree {
 			continue
 		}
-		if !vip && c.cfg.FreeOnly && !l.IsFree {
+		if !vip && cfg.FreeOnly && !l.IsFree {
 			continue
 		}
-		if c.cfg.Region != "" && !lineMatchesRegion(l, c.cfg.Region) {
+		if cfg.Region != "" && !lineMatchesRegion(l, cfg.Region) {
 			continue
 		}
-		if matchesAnyRegion(l, c.cfg.ExcludeRegions) {
+		if matchesAnyRegion(l, cfg.ExcludeRegions) {
 			continue
 		}
 		out = append(out, lineInfo{ID: l.ID, Name: l.Name, Location: l.Location, Category: l.Category, IsFree: l.IsFree, Target: lineTarget(l), DetectPort: l.DetectPort})
@@ -357,10 +365,11 @@ func (c *controller) connect(wantID int) error {
 	c.connectMu.Lock()
 	defer c.connectMu.Unlock()
 	c.refreshSettings()
+	cfg := c.currentSettings()
 	switching := false
 	manualSelection := wantID > 0
-	if wantID <= 0 && c.cfg.SelectedLineID > 0 {
-		wantID = c.cfg.SelectedLineID
+	if wantID <= 0 && cfg.SelectedLineID > 0 {
+		wantID = cfg.SelectedLineID
 	}
 	if !c.loggedIn() {
 		return fmt.Errorf("not logged in: register (free) or login first")
@@ -389,7 +398,7 @@ func (c *controller) connect(wantID int) error {
 	if err != nil {
 		return err
 	}
-	regionID := parseRegionID(c.cfg.Region)
+	regionID := parseRegionID(cfg.Region)
 	recommend := wantID <= 0
 	req := connectRequest{
 		Proto:          "SS",
@@ -424,19 +433,19 @@ func (c *controller) connect(wantID int) error {
 		c.engine.stop()
 		teardownRedirect()
 	}
-	if err := c.engine.start(resp, c.cfg.Mode, false, ""); err != nil {
+	if err := c.engine.start(resp, cfg.Mode, false, ""); err != nil {
 		return err
 	}
-	if err := setupRedirect(c.cfg.Mode, c.engine.server); err != nil {
+	if err := setupRedirect(cfg.Mode, c.engine.server); err != nil {
 		c.engine.stop()
 		return err
 	}
 	if err := appendHistory(connectedLine, resp); err != nil {
 		logf("warning: could not save connection history: %v", err)
 	}
-	if manualSelection || c.cfg.SelectedLineID <= 0 {
+	if manualSelection || cfg.SelectedLineID <= 0 {
 		saveSetting("selected_line_id", fmt.Sprint(connectedLine.ID))
-		c.cfg.SelectedLineID = connectedLine.ID
+		c.refreshSettings()
 	}
 	return nil
 }
@@ -459,26 +468,27 @@ func (c *controller) disconnect() error {
 // status returns the current state for the web UI.
 func (c *controller) status() map[string]any {
 	c.refreshSettings()
+	cfg := c.currentSettings()
 	acc := loadAccount()
 	lanDevice, routingApplied := networkIntegrationState()
 	return map[string]any{
 		"running":          c.engine.isRunning(),
 		"lineID":           c.engine.lineID,
 		"lineName":         c.engine.lineName,
-		"token":            c.cfg.Token != "",
-		"mode":             c.cfg.Mode,
+		"token":            cfg.Token != "",
+		"mode":             cfg.Mode,
 		"tun":              false,
 		"engine":           "ss-redir",
-		"region":           c.cfg.Region,
-		"excludeRegions":   c.cfg.ExcludeRegions,
-		"includeDomains":   c.cfg.IncludeDomains,
-		"excludeDomains":   c.cfg.ExcludeDomains,
-		"includeCIDRs":     c.cfg.IncludeCIDRs,
-		"excludeCIDRs":     c.cfg.ExcludeCIDRs,
-		"selectedLineID":   c.cfg.SelectedLineID,
-		"freeOnly":         c.cfg.FreeOnly,
-		"autoConnect":      c.cfg.AutoConnect,
-		"autoRoute":        c.cfg.AutoRoute,
+		"region":           cfg.Region,
+		"excludeRegions":   cfg.ExcludeRegions,
+		"includeDomains":   cfg.IncludeDomains,
+		"excludeDomains":   cfg.ExcludeDomains,
+		"includeCIDRs":     cfg.IncludeCIDRs,
+		"excludeCIDRs":     cfg.ExcludeCIDRs,
+		"selectedLineID":   cfg.SelectedLineID,
+		"freeOnly":         cfg.FreeOnly,
+		"autoConnect":      cfg.AutoConnect,
+		"autoRoute":        cfg.AutoRoute,
 		"account":          acc,
 		"vip":              activeVIP(acc),
 		"lanDevice":        lanDevice,
@@ -490,7 +500,8 @@ func (c *controller) status() map[string]any {
 // autoConnect is invoked at daemon startup.
 func (c *controller) autoConnect() {
 	c.refreshSettings()
-	if (!c.cfg.AutoConnect && !c.cfg.AutoRoute) || !c.loggedIn() {
+	cfg := c.currentSettings()
+	if (!cfg.AutoConnect && !cfg.AutoRoute) || !c.loggedIn() {
 		return
 	}
 	if err := c.connect(-1); err != nil {
@@ -504,7 +515,8 @@ func (c *controller) autoRouteWatchdog() {
 	backoff, nextAttempt := 10*time.Second, time.Time{}
 	for range ticker.C {
 		c.refreshSettings()
-		if !c.cfg.AutoRoute {
+		cfg := c.currentSettings()
+		if !cfg.AutoRoute {
 			continue
 		}
 		if !c.engine.isRunning() {
@@ -527,7 +539,7 @@ func (c *controller) autoRouteWatchdog() {
 		}
 		_, applied := networkIntegrationState()
 		if c.engine.isRunning() && !applied {
-			if err := setupRedirect(c.cfg.Mode, c.engine.server); err != nil {
+			if err := setupRedirect(cfg.Mode, c.engine.server); err != nil {
 				logf("automatic routing recovery failed: %v", err)
 			}
 		}

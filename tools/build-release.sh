@@ -2,7 +2,7 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-0.2.1}"
+VERSION="${VERSION:-0.2.2}"
 RELEASE="${RELEASE:-1}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
@@ -121,7 +121,10 @@ cp "$ROOT/openwrt/luci-app-opensocks/luasrc/view/opensocks/status.htm" "$luci_da
 cp "$ROOT/openwrt/luci-app-opensocks/root/usr/share/rpcd/acl.d/luci-app-opensocks.json" "$luci_data/usr/share/rpcd/acl.d/"
 po2lmo="${PO2LMO:-}"
 if [ -z "$po2lmo" ]; then
-	git clone -q --depth 1 --branch openwrt-22.03 https://github.com/openwrt/luci.git "$WORK/luci"
+	git -C "$WORK" init -q luci
+	git -C "$WORK/luci" remote add origin https://github.com/openwrt/luci.git
+	git -C "$WORK/luci" fetch -q --depth 1 origin 7a420e0c069d2257213136151c9c21565feced49
+	git -C "$WORK/luci" checkout -q FETCH_HEAD
 	make -s -C "$WORK/luci/modules/luci-base/src" po2lmo
 	po2lmo="$WORK/luci/modules/luci-base/src/po2lmo"
 fi

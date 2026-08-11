@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,6 +22,8 @@ import (
 // compact CIDR list instead of loading a MaxMind database into a large engine.
 
 const chinaRoutesURL = "https://raw.githubusercontent.com/17mon/china_ip_list/master/china_ip_list.txt"
+const chinaRoutesSHA256 = "1e855b2493221becffe6261c97efce005f2cea65bf506e3c6ca1687d7e7551ad"
+const dynamicRouteTimeout = "30m"
 
 // Startup recovery, explicit connect and the routing watchdog may converge at
 // the same time. Serialize complete table replacement so nft never appends a
@@ -54,7 +57,7 @@ func setupRedirect(mode, proxyServer string) error {
 		script.WriteString(" set cn4 { type ipv4_addr; flags interval; auto-merge; elements = {\n")
 		script.WriteString(strings.Join(cidrs, ",\n"))
 		script.WriteString("\n } }\n")
-		script.WriteString(" set domain4 { type ipv4_addr;")
+		script.WriteString(" set domain4 { type ipv4_addr; flags timeout; timeout " + dynamicRouteTimeout + ";")
 		if len(domainIPs) > 0 {
 			script.WriteString(" elements = { " + strings.Join(domainIPs, ", ") + " }")
 		}
@@ -62,7 +65,7 @@ func setupRedirect(mode, proxyServer string) error {
 		writeIPv4Set(&script, "include4", validCIDRs(cfg.IncludeCIDRs))
 		writeIPv4Set(&script, "exclude4", validCIDRs(cfg.ExcludeCIDRs))
 		for _, group := range chinaServiceGroups {
-			writeIPv4Set(&script, "svc_"+group.Name+"4", serviceIPs[group.Name])
+			writeDynamicIPv4Set(&script, "svc_"+group.Name+"4", serviceIPs[group.Name])
 		}
 	}
 	script.WriteString(" chain prerouting { type nat hook prerouting priority dstnat - 1; policy accept;\n")
@@ -129,6 +132,10 @@ func setupRedirect(mode, proxyServer string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		teardownTPROXYRoute()
 		return fmt.Errorf("nftables setup failed: %w (%s)", err, truncate(string(out), 500))
+	}
+	rememberDynamicElements("domain4", domainIPs)
+	for _, group := range chinaServiceGroups {
+		rememberDynamicElements("svc_"+group.Name+"4", serviceIPs[group.Name])
 	}
 	return nil
 }
@@ -306,32 +313,89 @@ func cloneServiceIPs(source map[string][]string) map[string][]string {
 }
 
 func refreshDomainRoutes() {
-	ips := resolveProxyDomains(readSettings())
+	config := readSettings()
+	ips, services := cachedRoutingIPs(config)
 	if len(ips) == 0 {
 		return
 	}
-	cmd := exec.Command("nft", "-f", "-")
-	cmd.Stdin = strings.NewReader("add element inet opensocks domain4 { " + strings.Join(ips, ", ") + " }\n")
-	_ = cmd.Run()
-	claimed := map[string]bool{}
-	var batch strings.Builder
+	sets := map[string][]string{"domain4": ips}
 	for _, group := range chinaServiceGroups {
-		var unique []string
-		for _, ip := range resolveHosts(group.Domains) {
-			if !claimed[ip] {
-				claimed[ip] = true
-				unique = append(unique, ip)
+		if values := services[group.Name]; len(values) > 0 {
+			sets["svc_"+group.Name+"4"] = values
+		}
+	}
+	addDynamicElements(sets)
+}
+
+var dynamicElementState = struct {
+	sync.Mutex
+	seen map[string]time.Time
+}{seen: map[string]time.Time{}}
+
+func rememberDynamicElements(set string, values []string) {
+	dynamicElementState.Lock()
+	defer dynamicElementState.Unlock()
+	now := time.Now()
+	for _, value := range values {
+		dynamicElementState.seen[set+"\x00"+value] = now
+	}
+}
+
+func addDynamicElements(sets map[string][]string) {
+	dynamicElementState.Lock()
+	now := time.Now()
+	// DNS answers can churn indefinitely. Expire bookkeeping as well as nft
+	// elements so the daemon's own map remains bounded on long-lived routers.
+	for key, last := range dynamicElementState.seen {
+		if now.Sub(last) > 2*time.Hour {
+			delete(dynamicElementState.seen, key)
+		}
+	}
+	pending := map[string][]string{}
+	for set, values := range sets {
+		for _, value := range values {
+			last := dynamicElementState.seen[set+"\x00"+value]
+			if last.IsZero() || now.Sub(last) > 31*time.Minute {
+				pending[set] = append(pending[set], value)
 			}
 		}
-		if len(unique) > 0 {
-			batch.WriteString("add element inet opensocks svc_" + group.Name + "4 { " + strings.Join(unique, ", ") + " }\n")
+	}
+	dynamicElementState.Unlock()
+	if len(pending) == 0 {
+		return
+	}
+	var batch strings.Builder
+	for set, values := range pending {
+		batch.WriteString("add element inet opensocks " + set + " { ")
+		writeTimedElements(&batch, values)
+		batch.WriteString(" }\n")
+	}
+	cmd := exec.Command("nft", "-f", "-")
+	cmd.Stdin = strings.NewReader(batch.String())
+	if cmd.Run() == nil {
+		for set, values := range pending {
+			rememberDynamicElements(set, values)
 		}
 	}
-	if batch.Len() > 0 {
-		c := exec.Command("nft", "-f", "-")
-		c.Stdin = strings.NewReader(batch.String())
-		_ = c.Run()
+}
+
+func writeTimedElements(script *strings.Builder, values []string) {
+	for i, value := range values {
+		if i > 0 {
+			script.WriteString(", ")
+		}
+		script.WriteString(value + " timeout " + dynamicRouteTimeout)
 	}
+}
+
+func writeDynamicIPv4Set(script *strings.Builder, name string, values []string) {
+	script.WriteString(" set " + name + " { type ipv4_addr; flags timeout; timeout " + dynamicRouteTimeout + ";")
+	if len(values) > 0 {
+		script.WriteString(" elements = { ")
+		writeTimedElements(script, values)
+		script.WriteString(" }")
+	}
+	script.WriteString(" }\n")
 }
 
 func splitConfigValues(value string) []string {
@@ -419,10 +483,15 @@ func resolveIPv4(host string) string {
 
 func loadChinaRoutes() ([]string, error) {
 	path := filepath.Join(engineDir, "china_ip_list.txt")
-	if !fileExists(path) {
+	if !verifiedFile(path, chinaRoutesSHA256) {
+		_ = os.Remove(path)
 		if err := download(chinaRoutesURL, path); err != nil {
 			return nil, fmt.Errorf("China route download failed: %w", err)
 		}
+	}
+	if !verifiedFile(path, chinaRoutesSHA256) {
+		_ = os.Remove(path)
+		return nil, fmt.Errorf("China route signature hash mismatch")
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -439,6 +508,14 @@ func loadChinaRoutes() ([]string, error) {
 		return nil, fmt.Errorf("China route list is empty")
 	}
 	return cidrs, nil
+}
+
+func verifiedFile(path, expected string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(b)) == expected
 }
 
 // download atomically fetches a small runtime data file.

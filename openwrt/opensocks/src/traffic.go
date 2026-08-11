@@ -101,7 +101,9 @@ func startTrafficSampler() {
 	go func() {
 		previous := map[string]uint64{}
 		previousAt := time.Time{}
-		saveTicker := time.NewTicker(5 * time.Minute)
+		// Keep one-second in-memory counters while limiting persistent flash
+		// writes to four per hour plus graceful shutdown.
+		saveTicker := time.NewTicker(15 * time.Minute)
 		defer saveTicker.Stop()
 		for {
 			now, current := time.Now(), readNFTCounters()

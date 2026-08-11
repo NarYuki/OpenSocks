@@ -59,7 +59,7 @@ func runDaemon() {
 		defer ticker.Stop()
 		for range ticker.C {
 			ctl.refreshSettings()
-			if ctl.engine.isRunning() && ctl.cfg.Mode == "smart" {
+			if ctl.engine.isRunning() && ctl.currentSettings().Mode == "smart" {
 				refreshDomainRoutes()
 			}
 		}

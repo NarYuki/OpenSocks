@@ -35,6 +35,11 @@ func pingTarget(target string, port int) latencyResult {
 		return latencyResult{MeasuredAt: time.Now()}
 	}
 	latencyMu.Lock()
+	for key, cached := range latencyCache {
+		if time.Since(cached.MeasuredAt) > 10*time.Minute {
+			delete(latencyCache, key)
+		}
+	}
 	if cached, ok := latencyCache[target]; ok && time.Since(cached.MeasuredAt) < 60*time.Second {
 		latencyMu.Unlock()
 		return cached

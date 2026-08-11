@@ -271,15 +271,40 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int index = 0;
   int overlayDepth = 0;
-  late final pages = <Widget>[
-    OverviewPage(
-      api: widget.api,
-      onOverlayVisibilityChanged: _setOverlayVisible,
-    ),
-    TrafficPage(api: widget.api),
-    TestsPage(api: widget.api, onOverlayVisibilityChanged: _setOverlayVisible),
-    AccountPage(api: widget.api),
-  ];
+  late final ValueNotifier<int> selectedTab;
+  late final List<Widget> pages;
+
+  @override
+  void initState() {
+    super.initState();
+    selectedTab = ValueNotifier<int>(0);
+    pages = <Widget>[
+      OverviewPage(
+        api: widget.api,
+        selectedTab: selectedTab,
+        onOverlayVisibilityChanged: _setOverlayVisible,
+      ),
+      TrafficPage(api: widget.api, selectedTab: selectedTab),
+      TestsPage(
+        api: widget.api,
+        onOverlayVisibilityChanged: _setOverlayVisible,
+      ),
+      AccountPage(api: widget.api),
+    ];
+  }
+
+  @override
+  void dispose() {
+    selectedTab.dispose();
+    widget.api.close();
+    super.dispose();
+  }
+
+  void _selectTab(int value) {
+    if (value == index) return;
+    selectedTab.value = value;
+    setState(() => index = value);
+  }
 
   void _setOverlayVisible(bool visible) {
     if (!mounted) return;
@@ -332,7 +357,7 @@ class _HomePageState extends State<HomePage> {
     final adaptiveBottomBar = AdaptiveBottomNavigationBar(
       useNativeBottomBar: true,
       selectedIndex: index,
-      onTap: (v) => setState(() => index = v),
+      onTap: _selectTab,
       selectedItemColor: Theme.of(c).colorScheme.primary,
       bottomNavigationBar: _androidNavigation(c),
       items: _navigationItems(c),
@@ -440,7 +465,7 @@ class _HomePageState extends State<HomePage> {
             backgroundColor: colors.surface,
             indicatorColor: colors.primaryContainer,
             selectedIndex: index,
-            onDestinationSelected: (v) => setState(() => index = v),
+            onDestinationSelected: _selectTab,
             destinations: [
               NavigationDestination(
                 icon: Icon(Icons.power_settings_new_outlined),
@@ -578,9 +603,11 @@ class OverviewPage extends StatefulWidget {
   const OverviewPage({
     super.key,
     required this.api,
+    required this.selectedTab,
     required this.onOverlayVisibilityChanged,
   });
   final OpenSocksApi api;
+  final ValueListenable<int> selectedTab;
   final ValueChanged<bool> onOverlayVisibilityChanged;
   @override
   State<OverviewPage> createState() => _OverviewPageState();
@@ -589,13 +616,16 @@ class OverviewPage extends StatefulWidget {
 class _OverviewPageState extends State<OverviewPage> {
   Map<String, dynamic>? s, t;
   Timer? timer;
+  bool trafficPending = false;
   bool busy = false;
   String operation = '';
   @override
   void initState() {
     super.initState();
     refresh();
-    timer = Timer.periodic(const Duration(seconds: 1), (_) => traffic());
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (widget.selectedTab.value == 0) traffic();
+    });
   }
 
   @override
@@ -614,10 +644,16 @@ class _OverviewPageState extends State<OverviewPage> {
   }
 
   Future<void> traffic() async {
+    if (trafficPending) return;
+    trafficPending = true;
     try {
       final x = await widget.api.get('traffic');
       if (mounted) setState(() => t = x);
-    } catch (_) {}
+    } catch (_) {
+      // The next active-tab tick retries.
+    } finally {
+      trafficPending = false;
+    }
   }
 
   Future<void> refreshUntilSettled({required bool expectRunning}) async {
@@ -1408,8 +1444,9 @@ class _LinesPageState extends State<LinesPage> {
 }
 
 class TrafficPage extends StatefulWidget {
-  const TrafficPage({super.key, required this.api});
+  const TrafficPage({super.key, required this.api, required this.selectedTab});
   final OpenSocksApi api;
+  final ValueListenable<int> selectedTab;
   @override
   State<TrafficPage> createState() => _TrafficPageState();
 }
@@ -1418,11 +1455,14 @@ class _TrafficPageState extends State<TrafficPage> {
   Map<String, dynamic>? data;
   Object? loadError;
   Timer? timer;
+  bool loadPending = false;
   @override
   void initState() {
     super.initState();
     load();
-    timer = Timer.periodic(const Duration(seconds: 1), (_) => load());
+    timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (widget.selectedTab.value == 1) load();
+    });
   }
 
   @override
@@ -1432,6 +1472,8 @@ class _TrafficPageState extends State<TrafficPage> {
   }
 
   Future<void> load() async {
+    if (loadPending) return;
+    loadPending = true;
     try {
       final x = await widget.api.get('traffic');
       if (mounted) {
@@ -1442,6 +1484,8 @@ class _TrafficPageState extends State<TrafficPage> {
       }
     } catch (error) {
       if (mounted) setState(() => loadError = error);
+    } finally {
+      loadPending = false;
     }
   }
 

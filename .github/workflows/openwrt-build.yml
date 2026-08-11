@@ -2,10 +2,12 @@ name: Build OpenWrt packages
 
 on:
   push:
+    branches: [ main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: openwrt-build-${{ github.ref }}
@@ -16,13 +18,15 @@ jobs:
     name: OpenWrt IPK and opkg feed
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    permissions:
+      contents: write
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: openwrt/opensocks/src/go.mod
           cache: false
@@ -83,7 +87,7 @@ jobs:
           "${RUNNER_TEMP}/usign/build/usign" -V -m "$RELEASE_DIR/SHA256SUMS" -p "$GITHUB_WORKSPACE/keys/d24a5e234001294c" -x "$RELEASE_DIR/SHA256SUMS.sig"
 
       - name: Upload OpenWrt artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: opensocks-openwrt-${{ github.sha }}
           path: ${{ runner.temp }}/opensocks-release/
