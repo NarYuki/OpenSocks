@@ -73,7 +73,10 @@ while read -r checksum relative; do
 		Packages|Packages.gz|Packages.sig|SHA256SUMS|SHA256SUMS.sig|"$public_key_fingerprint") continue ;;
 	esac
 	mkdir -p "$stage/by-sha/$checksum"
-	ln -s "../../$name" "$stage/by-sha/$checksum/$name"
+	# Use a same-filesystem hard link. Some HTTP servers intentionally refuse
+	# symlinks outside their configured path even when the resolved file stays
+	# below the document root, which makes opkg's immutable URL return 404.
+	ln "$stage/$name" "$stage/by-sha/$checksum/$name"
 done < "$stage/SHA256SUMS"
 
 find "$stage" -type d -exec chmod 0755 {} +
