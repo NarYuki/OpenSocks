@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: openwrt-build-${{ github.ref }}
@@ -42,15 +42,25 @@ jobs:
           OPKG_SIGNING_KEY: ${{ secrets.OPKG_SIGNING_KEY }}
           OPENWRT_ONLY: "1"
           RELEASE_DIR: ${{ runner.temp }}/opensocks-release
-          VERSION: 0.2.0
         run: |
           test -n "$OPKG_SIGNING_KEY" || { echo 'OPKG_SIGNING_KEY secret is required' >&2; exit 1; }
+          VERSION="$(sed -n 's/^PKG_VERSION:=//p' openwrt/opensocks/Makefile)"
+          RELEASE="$(sed -n 's/^PKG_RELEASE:=//p' openwrt/opensocks/Makefile)"
+          test -n "$VERSION" && test -n "$RELEASE"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            test "$GITHUB_REF_NAME" = "v$VERSION"
+          fi
+          for makefile in openwrt/opensocks-minimal/Makefile openwrt/luci-app-opensocks/Makefile; do
+            test "$(sed -n 's/^PKG_VERSION:=//p' "$makefile")" = "$VERSION"
+            test "$(sed -n 's/^PKG_RELEASE:=//p' "$makefile")" = "$RELEASE"
+          done
           umask 077
           printf '%s\n' "$OPKG_SIGNING_KEY" > "${RUNNER_TEMP}/opensocks-usign.sec"
           OPENWRT_ONLY=1 \
           REQUIRE_SIGNATURE=1 \
           RELEASE_DIR="$RELEASE_DIR" \
           VERSION="$VERSION" \
+          RELEASE="$RELEASE" \
           USIGN="${RUNNER_TEMP}/usign/build/usign" \
           OPKG_SIGNING_KEY_FILE="${RUNNER_TEMP}/opensocks-usign.sec" \
           OPKG_PUBLIC_KEY_FILE="$GITHUB_WORKSPACE/keys/d24a5e234001294c" \
@@ -79,3 +89,16 @@ jobs:
           path: ${{ runner.temp }}/opensocks-release/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish versioned GitHub Release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_DIR: ${{ runner.temp }}/opensocks-release
+        run: |
+          case "$GITHUB_REF_NAME" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "Invalid release tag: $GITHUB_REF_NAME" >&2; exit 1;; esac
+          gh release create "$GITHUB_REF_NAME" "$RELEASE_DIR"/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "OpenSocks ${GITHUB_REF_NAME#v}" \
+            --generate-notes

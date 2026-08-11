@@ -2,8 +2,8 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-0.2.0}"
-RELEASE="${RELEASE:-6}"
+VERSION="${VERSION:-0.2.1}"
+RELEASE="${RELEASE:-1}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM

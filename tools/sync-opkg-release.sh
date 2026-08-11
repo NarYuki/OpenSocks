@@ -18,7 +18,6 @@ case "$tag" in
 	*) printf 'Invalid release tag: %s\n' "$tag" >&2; exit 1 ;;
 esac
 version="${tag#v}"
-release="${PACKAGE_RELEASE:-6}"
 
 command -v curl >/dev/null
 command -v jq >/dev/null
@@ -28,14 +27,39 @@ stage="$(mktemp -d "$publish_root/.opkg-${tag}.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT INT TERM
 base="https://github.com/$repository/releases/download/$tag"
 cache_bust="$(date -u +%s)"
-assets="Packages Packages.gz Packages.sig SHA256SUMS SHA256SUMS.sig d24a5e234001294c luci-app-opensocks_${version}-${release}_all.ipk opensocks-linux-mipsle.gz opensocks-minimal_${version}-${release}_all.ipk opensocks_${version}-${release}_mipsel_24kc.ipk"
+metadata_assets="Packages Packages.gz Packages.sig SHA256SUMS SHA256SUMS.sig d24a5e234001294c"
 
-for asset in $assets; do
+for asset in $metadata_assets; do
 	curl -fL --retry 3 --connect-timeout 15 -o "$stage/$asset" "$base/$asset?cache=$cache_bust"
 done
 
 test "$("$usign_bin" -F -p "$stage/$public_key_fingerprint")" = "$public_key_fingerprint"
 "$usign_bin" -V -m "$stage/Packages" -p "$stage/$public_key_fingerprint" -x "$stage/Packages.sig"
+
+package_asset() {
+	package="$1"
+	awk -v wanted="$package" '
+		BEGIN { RS=""; FS="\n" }
+		$0 ~ "(^|\\n)Package: " wanted "(\\n|$)" {
+			for (i = 1; i <= NF; i++)
+				if ($i ~ /^Filename: by-sha\//) {
+					sub(/^Filename: by-sha\/[0-9a-f]+\//, "", $i)
+					print $i
+					exit
+				}
+		}
+	' "$stage/Packages"
+}
+
+package_assets="$(package_asset luci-app-opensocks) $(package_asset opensocks-minimal) $(package_asset opensocks)"
+for asset in $package_assets opensocks-linux-mipsle.gz; do
+	case "$asset" in
+		luci-app-opensocks_${version}-*_all.ipk|opensocks-minimal_${version}-*_all.ipk|opensocks_${version}-*_mipsel_24kc.ipk|opensocks-linux-mipsle.gz) ;;
+		*) printf 'Invalid release asset from Packages: %s\n' "$asset" >&2; exit 1 ;;
+	esac
+	curl -fL --retry 3 --connect-timeout 15 -o "$stage/$asset" "$base/$asset?cache=$cache_bust"
+done
+
 "$usign_bin" -V -m "$stage/SHA256SUMS" -p "$stage/$public_key_fingerprint" -x "$stage/SHA256SUMS.sig"
 (cd "$stage" && sha256sum -c SHA256SUMS)
 gzip -t "$stage/Packages.gz"
