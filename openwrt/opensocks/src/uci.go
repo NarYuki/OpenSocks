@@ -20,6 +20,8 @@ type settings struct {
 	AutoConnect    bool
 	AutoRoute      bool
 	SessionCount   int
+	Slot2LineID    int
+	Slot3LineID    int
 	Region         string
 	ExcludeRegions string
 	IncludeDomains string
@@ -82,6 +84,12 @@ func readSettings() *settings {
 	s.ExcludeCIDRs = values["exclude_cidrs"]
 	if v := values["selected_line_id"]; v != "" {
 		s.SelectedLineID, _ = strconv.Atoi(v)
+	}
+	if v := values["slot2_line_id"]; v != "" {
+		s.Slot2LineID, _ = strconv.Atoi(v)
+	}
+	if v := values["slot3_line_id"]; v != "" {
+		s.Slot3LineID, _ = strconv.Atoi(v)
 	}
 	if v := values["api_domain"]; v != "" {
 		s.APIDomain = v

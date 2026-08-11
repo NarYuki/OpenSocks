@@ -39,5 +39,10 @@
   "serviceOtherChina": "その他の中国通信"
   ,"sessionMode": "セッションモード",
   "apply": "適用"
-  ,"tripleMode": "トリプルセッション"
+  ,"tripleMode": "トリプルセッション",
+  "session2Server": "セッション2のサーバー",
+  "session3Server": "セッション3のサーバー",
+  "followMainServer": "主回線のサーバーに追従",
+  "followMainServerDescription": "主回線で選択したサーバーを自動的に使用します。",
+  "serverChanged": "セッションのサーバーを変更しました"
 }

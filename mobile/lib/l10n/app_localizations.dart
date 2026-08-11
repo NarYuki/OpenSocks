@@ -597,6 +597,36 @@ abstract class AppLocalizations {
   /// In ja, this message translates to:
   /// **'トリプルセッション'**
   String get tripleMode;
+
+  /// No description provided for @session2Server.
+  ///
+  /// In ja, this message translates to:
+  /// **'セッション2のサーバー'**
+  String get session2Server;
+
+  /// No description provided for @session3Server.
+  ///
+  /// In ja, this message translates to:
+  /// **'セッション3のサーバー'**
+  String get session3Server;
+
+  /// No description provided for @followMainServer.
+  ///
+  /// In ja, this message translates to:
+  /// **'主回線のサーバーに追従'**
+  String get followMainServer;
+
+  /// No description provided for @followMainServerDescription.
+  ///
+  /// In ja, this message translates to:
+  /// **'主回線で選択したサーバーを自動的に使用します。'**
+  String get followMainServerDescription;
+
+  /// No description provided for @serverChanged.
+  ///
+  /// In ja, this message translates to:
+  /// **'セッションのサーバーを変更しました'**
+  String get serverChanged;
 }
 
 class _AppLocalizationsDelegate

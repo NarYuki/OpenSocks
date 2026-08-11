@@ -224,7 +224,8 @@ func (c *controller) connectDualLine(ln *line, request connectRequest, switching
 }
 
 func (c *controller) connectMultiLine(ln *line, request connectRequest, switching, manualSelection bool, cfg settings, count int) error {
-	clients, responses, tokens, err := issueConnections(cfg.APIDomain, ln.ID, request, count)
+	lineIDs := sessionLineIDs(ln.ID, cfg, count)
+	clients, responses, tokens, err := issueConnections(cfg.APIDomain, lineIDs, request)
 	if err != nil {
 		return err
 	}
@@ -243,7 +244,7 @@ func (c *controller) connectMultiLine(ln *line, request connectRequest, switchin
 		cleanup()
 		return err
 	}
-	if err := setupRedirect(cfg.Mode, c.engine.server, count); err != nil {
+	if err := setupRedirect(cfg.Mode, c.engine.serverAddresses(), count); err != nil {
 		c.engine.stop()
 		cleanup()
 		return err
@@ -266,10 +267,28 @@ func (c *controller) connectMultiLine(ln *line, request connectRequest, switchin
 }
 
 func issueDualConnections(domain string, lineID int, request connectRequest) ([]*apiClient, []*connectResponse, []string, error) {
-	return issueConnections(domain, lineID, request, 2)
+	return issueConnections(domain, []int{lineID, lineID}, request)
 }
 
-func issueConnections(domain string, lineID int, request connectRequest, count int) ([]*apiClient, []*connectResponse, []string, error) {
+func sessionLineIDs(primary int, cfg settings, count int) []int {
+	ids := []int{primary, cfg.Slot2LineID, cfg.Slot3LineID}
+	if count < 1 {
+		count = 1
+	}
+	if count > len(ids) {
+		count = len(ids)
+	}
+	ids = ids[:count]
+	for i := 1; i < len(ids); i++ {
+		if ids[i] <= 0 {
+			ids[i] = primary
+		}
+	}
+	return ids
+}
+
+func issueConnections(domain string, lineIDs []int, request connectRequest) ([]*apiClient, []*connectResponse, []string, error) {
+	count := len(lineIDs)
 	if count < 2 || count > 3 {
 		return nil, nil, nil, fmt.Errorf("session count must be 2 or 3")
 	}
@@ -319,7 +338,12 @@ func issueConnections(domain string, lineID int, request connectRequest, count i
 		wg.Add(1)
 		go func(index int, api *apiClient) {
 			defer wg.Done()
-			responses[index], errs[index] = api.connect(lineID, request)
+			slotRequest := request
+			if lineIDs[index] > 0 {
+				value := false
+				slotRequest.RecommendLine = &value
+			}
+			responses[index], errs[index] = api.connect(lineIDs[index], slotRequest)
 		}(i, client)
 	}
 	wg.Wait()

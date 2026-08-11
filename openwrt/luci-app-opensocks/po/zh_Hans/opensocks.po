@@ -21,6 +21,15 @@ msgid "Engine"
 msgstr "引擎"
 msgid "Session mode"
 msgstr "会话模式"
+
+msgid "Session 2 server"
+msgstr "会话 2 服务器"
+
+msgid "Session 3 server"
+msgstr "会话 3 服务器"
+
+msgid "Follow main server"
+msgstr "跟随主线路服务器"
 msgid "Dual mode"
 msgstr "双会话模式"
 msgid "Single mode"

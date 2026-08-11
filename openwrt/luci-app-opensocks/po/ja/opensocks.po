@@ -21,6 +21,15 @@ msgid "Engine"
 msgstr "エンジン"
 msgid "Session mode"
 msgstr "セッションモード"
+
+msgid "Session 2 server"
+msgstr "セッション2のサーバー"
+
+msgid "Session 3 server"
+msgstr "セッション3のサーバー"
+
+msgid "Follow main server"
+msgstr "主回線のサーバーに追従"
 msgid "Dual mode"
 msgstr "デュアルモード"
 msgid "Single mode"

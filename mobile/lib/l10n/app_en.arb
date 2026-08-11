@@ -38,5 +38,10 @@
   "serviceOtherChina": "Other China traffic"
   ,"sessionMode": "Session mode",
   "apply": "Apply"
-  ,"tripleMode": "Triple mode"
+  ,"tripleMode": "Triple mode",
+  "session2Server": "Session 2 server",
+  "session3Server": "Session 3 server",
+  "followMainServer": "Follow main server",
+  "followMainServerDescription": "Automatically uses the server selected for the main connection.",
+  "serverChanged": "Session server changed"
 }

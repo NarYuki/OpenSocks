@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.11
+
+### Session servers
+
+- Added independent server selection for the second and third sessions in LuCI and the mobile client.
+- Kept every additional session linked to the main server by default while allowing either session to be pinned separately.
+- Preserved per-session server selections across service and router restarts.
+- Excluded and accounted for every active VPN server address when sessions use different endpoints.
+
 ## 0.2.10
 
 ### Smart routing

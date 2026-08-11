@@ -5,6 +5,8 @@ local request = {
     auto_connect = true,
     auto_route = true,
     session_count = 3,
+    slot2_line_id = 321,
+    slot3_line_id = 654,
     region = "",
     exclude_regions = "",
     include_domains = "",
@@ -51,5 +53,7 @@ action_settings()
 assert(forwarded, "settings payload was not serialized")
 assert(forwarded.mode == "global", "routing mode was not forwarded")
 assert(forwarded.session_count == 3, "session count was not forwarded")
+assert(forwarded.slot2_line_id == 321, "session 2 server was not forwarded")
+assert(forwarded.slot3_line_id == 654, "session 3 server was not forwarded")
 assert(response and response.ok == true, "daemon response was not returned")
 print("PASS LuCI settings forwarding")

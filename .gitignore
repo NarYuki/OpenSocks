@@ -12,6 +12,7 @@ outputs/
 dist/
 release/
 DerivedData/
+mobile/android/.kotlin/
 *.xcarchive
 *.dSYM
 *.ipa

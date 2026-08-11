@@ -33,14 +33,22 @@ var (
 )
 
 type engine struct {
-	mu        sync.Mutex
-	cmd       *exec.Cmd
-	cmd2      *exec.Cmd
-	cmd3      *exec.Cmd
-	connected bool
-	lineName  string
-	lineID    int
-	server    string
+	mu           sync.Mutex
+	cmd          *exec.Cmd
+	cmd2         *exec.Cmd
+	cmd3         *exec.Cmd
+	connected    bool
+	lineName     string
+	lineID       int
+	server       string
+	servers      []string
+	sessionLines []sessionLineStatus
+}
+
+type sessionLineStatus struct {
+	Slot     int    `json:"slot"`
+	LineID   int    `json:"lineID"`
+	LineName string `json:"lineName"`
 }
 
 func newEngine() *engine {
@@ -412,7 +420,27 @@ func (e *engine) startConnections(connections ...*connectResponse) error {
 	e.lineName = conn.LineName
 	e.lineID = conn.LineID
 	e.server = boot.Server
+	e.servers = nil
+	e.sessionLines = nil
+	for i, connection := range connections {
+		if selected := selectedBoot(connection); selected != nil {
+			e.servers = append(e.servers, selected.Server)
+		}
+		e.sessionLines = append(e.sessionLines, sessionLineStatus{Slot: i + 1, LineID: connection.LineID, LineName: connection.LineName})
+	}
 	return nil
+}
+
+func (e *engine) serverAddresses() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]string(nil), e.servers...)
+}
+
+func (e *engine) sessionLineStatuses() []sessionLineStatus {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]sessionLineStatus(nil), e.sessionLines...)
 }
 
 func (e *engine) stop() {
@@ -437,6 +465,8 @@ func (e *engine) stop() {
 	e.lineName = ""
 	e.lineID = 0
 	e.server = ""
+	e.servers = nil
+	e.sessionLines = nil
 }
 
 func (e *engine) isRunning() bool {

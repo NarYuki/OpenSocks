@@ -368,6 +368,8 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			AutoRoute               *bool  `json:"auto_route"`
 			DualSessionExperimental *bool  `json:"dual_session_experimental"`
 			SessionCount            int    `json:"session_count"`
+			Slot2LineID             *int   `json:"slot2_line_id"`
+			Slot3LineID             *int   `json:"slot3_line_id"`
 			Region                  string `json:"region"`
 			ExcludeRegions          string `json:"exclude_regions"`
 			IncludeDomains          string `json:"include_domains"`
@@ -403,6 +405,12 @@ func (s *server) handleSettings(w http.ResponseWriter, r *http.Request) {
 			} else {
 				updates["session_count"] = "1"
 			}
+		}
+		if in.Slot2LineID != nil && *in.Slot2LineID >= 0 {
+			updates["slot2_line_id"] = strconv.Itoa(*in.Slot2LineID)
+		}
+		if in.Slot3LineID != nil && *in.Slot3LineID >= 0 {
+			updates["slot3_line_id"] = strconv.Itoa(*in.Slot3LineID)
 		}
 		updates["region"] = in.Region
 		updates["exclude_regions"] = in.ExcludeRegions

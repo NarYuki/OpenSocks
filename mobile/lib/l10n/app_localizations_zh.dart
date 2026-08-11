@@ -266,4 +266,19 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get tripleMode => '三会话模式';
+
+  @override
+  String get session2Server => '会话 2 服务器';
+
+  @override
+  String get session3Server => '会话 3 服务器';
+
+  @override
+  String get followMainServer => '跟随主线路服务器';
+
+  @override
+  String get followMainServerDescription => '自动使用主线路所选的服务器。';
+
+  @override
+  String get serverChanged => '会话服务器已更改';
 }

@@ -38,5 +38,10 @@
   "serviceOtherChina": "其他中国流量"
   ,"sessionMode": "会话模式",
   "apply": "应用"
-  ,"tripleMode": "三会话模式"
+  ,"tripleMode": "三会话模式",
+  "session2Server": "会话 2 服务器",
+  "session3Server": "会话 3 服务器",
+  "followMainServer": "跟随主线路服务器",
+  "followMainServerDescription": "自动使用主线路所选的服务器。",
+  "serverChanged": "会话服务器已更改"
 }

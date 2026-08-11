@@ -439,7 +439,7 @@ func (c *controller) connect(wantID int) error {
 	if err := c.engine.start(resp, cfg.Mode, false, ""); err != nil {
 		return err
 	}
-	if err := setupRedirect(cfg.Mode, c.engine.server, 1); err != nil {
+	if err := setupRedirect(cfg.Mode, c.engine.serverAddresses(), 1); err != nil {
 		c.engine.stop()
 		return err
 	}
@@ -493,6 +493,9 @@ func (c *controller) status() map[string]any {
 		"autoConnect":        cfg.AutoConnect,
 		"autoRoute":          cfg.AutoRoute,
 		"sessionCount":       cfg.SessionCount,
+		"slot2LineID":        cfg.Slot2LineID,
+		"slot3LineID":        cfg.Slot3LineID,
+		"sessionLines":       c.engine.sessionLineStatuses(),
 		"activeSessionCount": c.engine.activeSessionCount(),
 		"account":            acc,
 		"vip":                activeVIP(acc),
@@ -547,7 +550,7 @@ func (c *controller) autoRouteWatchdog() {
 		}
 		_, applied := networkIntegrationState()
 		if c.engine.isRunning() && !applied {
-			if err := setupRedirect(cfg.Mode, c.engine.server, c.engine.activeSessionCount()); err != nil {
+			if err := setupRedirect(cfg.Mode, c.engine.serverAddresses(), c.engine.activeSessionCount()); err != nil {
 				logf("automatic routing recovery failed: %v", err)
 			}
 		}

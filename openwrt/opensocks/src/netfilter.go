@@ -54,11 +54,18 @@ var publicEncryptedDNS4 = []string{
 // second copy of the rules to a table another goroutine just created.
 var redirectMu sync.Mutex
 
-func setupRedirect(mode, proxyServer string, sessionCount int) error {
+func setupRedirect(mode string, proxyServers []string, sessionCount int) error {
 	redirectMu.Lock()
 	defer redirectMu.Unlock()
 	cfg := readSettings()
-	serverIP := resolveIPv4(proxyServer)
+	proxyIPs := make([]string, 0, len(proxyServers))
+	seenProxyIP := map[string]bool{}
+	for _, server := range proxyServers {
+		if ip := resolveIPv4(server); ip != "" && !seenProxyIP[ip] {
+			seenProxyIP[ip] = true
+			proxyIPs = append(proxyIPs, ip)
+		}
+	}
 	var cidrs []string
 	var domainIPs []string
 	serviceIPs := map[string][]string{}
@@ -83,6 +90,9 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 	}
 	script.WriteString("table inet opensocks {\n")
 	script.WriteString(" counter proxy_up {}\n counter proxy_down {}\n")
+	if len(proxyIPs) > 0 {
+		writeIPv4Set(&script, "proxy_servers4", proxyIPs)
+	}
 	for _, group := range chinaServiceGroups {
 		script.WriteString(" counter svc_" + group.Name + "_up {}\n counter svc_" + group.Name + "_down {}\n")
 	}
@@ -130,8 +140,8 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 	script.WriteString(" chain prerouting { type nat hook prerouting priority dstnat - 1; policy accept;\n")
 	script.WriteString("  iifname != \"" + detectLANDevice() + "\" return\n")
 	script.WriteString("  ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 } return\n")
-	if serverIP != "" {
-		script.WriteString("  ip daddr " + serverIP + " return\n")
+	if len(proxyIPs) > 0 {
+		script.WriteString("  ip daddr @proxy_servers4 return\n")
 	}
 	if mode == "global" {
 		script.WriteString("  meta l4proto tcp counter " + tcpRedirect + "\n")
@@ -148,8 +158,8 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 	script.WriteString(" chain prerouting_udp { type filter hook prerouting priority mangle; policy accept;\n")
 	script.WriteString("  iifname != \"" + detectLANDevice() + "\" return\n")
 	script.WriteString("  ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4 } return\n")
-	if serverIP != "" {
-		script.WriteString("  ip daddr " + serverIP + " return\n")
+	if len(proxyIPs) > 0 {
+		script.WriteString("  ip daddr @proxy_servers4 return\n")
 	}
 	if mode == "global" {
 		script.WriteString("  meta l4proto udp counter " + udpRedirect + "\n")
@@ -186,9 +196,9 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		script.WriteString("  oifname \"" + lan + "\" ct original ip daddr @cn4 counter name svc_other_china_down\n")
 		script.WriteString("}\n")
 	}
-	if serverIP != "" {
-		script.WriteString(" chain traffic_out { type filter hook output priority filter - 2; policy accept; ip daddr " + serverIP + " counter name proxy_up; }\n")
-		script.WriteString(" chain traffic_in { type filter hook input priority filter - 2; policy accept; ip saddr " + serverIP + " counter name proxy_down; }\n")
+	if len(proxyIPs) > 0 {
+		script.WriteString(" chain traffic_out { type filter hook output priority filter - 2; policy accept; ip daddr @proxy_servers4 counter name proxy_up; }\n")
+		script.WriteString(" chain traffic_in { type filter hook input priority filter - 2; policy accept; ip saddr @proxy_servers4 counter name proxy_down; }\n")
 	}
 	script.WriteString("}\n")
 

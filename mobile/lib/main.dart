@@ -829,6 +829,24 @@ class _OverviewPageState extends State<OverviewPage> {
                             'sessions': option.$1,
                           }),
                         ),
+                      if (currentSessions >= 2) ...[
+                        const Divider(),
+                        ListTile(
+                          leading: const Icon(Icons.filter_2_rounded),
+                          title: Text(sheetContext.l10n.session2Server),
+                          subtitle: Text(sessionServerLabel(2)),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.pop(sheetContext, {'slot': 2}),
+                        ),
+                      ],
+                      if (currentSessions >= 3)
+                        ListTile(
+                          leading: const Icon(Icons.filter_3_rounded),
+                          title: Text(sheetContext.l10n.session3Server),
+                          subtitle: Text(sessionServerLabel(3)),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.pop(sheetContext, {'slot': 3}),
+                        ),
                     ],
                   ),
                 ),
@@ -838,12 +856,96 @@ class _OverviewPageState extends State<OverviewPage> {
         ),
       );
       if (selected == null || !mounted) return;
+      if (selected['slot'] case final int slot) {
+        await chooseSessionServer(slot);
+        return;
+      }
       final mode = selected['mode'] as String;
       final sessions = selected['sessions'] as int;
       if (mode == currentMode && sessions == currentSessions) return;
       await applyRoutingMode(mode, sessions);
     } finally {
       widget.onOverlayVisibilityChanged(false);
+    }
+  }
+
+  String sessionServerLabel(int slot) {
+    final configured = (s?['slot${slot}LineID'] as num?)?.toInt() ?? 0;
+    if (configured == 0) return context.l10n.followMainServer;
+    for (final item in s?['sessionLines'] as List<dynamic>? ?? const []) {
+      if (item is Map && item['slot'] == slot) {
+        return item['lineName']?.toString() ?? '#$configured';
+      }
+    }
+    return '#$configured';
+  }
+
+  Future<void> chooseSessionServer(int slot) async {
+    final current = s!;
+    final selectedID = (current['slot${slot}LineID'] as num?)?.toInt() ?? 0;
+    widget.onOverlayVisibilityChanged(true);
+    int? lineID;
+    try {
+      lineID = await showModalBottomSheet<int>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        showDragHandle: true,
+        builder: (sheetContext) => FractionallySizedBox(
+          heightFactor: .94,
+          child: LinesPage(
+            api: widget.api,
+            allowFollowMain: true,
+            selectedLineID: selectedID,
+            onSelect: (id) => Navigator.pop(sheetContext, id),
+          ),
+        ),
+      );
+    } finally {
+      widget.onOverlayVisibilityChanged(false);
+    }
+    if (lineID == null || lineID == selectedID || !mounted) return;
+    await applySessionServer(slot, lineID);
+  }
+
+  Future<void> applySessionServer(int slot, int lineID) async {
+    final current = s!;
+    setState(() {
+      busy = true;
+      operation = context.l10n.switching;
+    });
+    try {
+      await widget.api.post('settings', {
+        'mode': current['mode'] ?? 'smart',
+        'tun': current['tun'] == true,
+        'free_only': current['freeOnly'] == true,
+        'auto_connect': current['autoConnect'] == true,
+        'auto_route': current['autoRoute'] == true,
+        'session_count': current['sessionCount'] ?? 1,
+        'slot2_line_id': slot == 2 ? lineID : current['slot2LineID'] ?? 0,
+        'slot3_line_id': slot == 3 ? lineID : current['slot3LineID'] ?? 0,
+        'region': current['region'] ?? '',
+        'exclude_regions': current['excludeRegions'] ?? '',
+        'include_domains': current['includeDomains'] ?? '',
+        'exclude_domains': current['excludeDomains'] ?? '',
+        'include_cidrs': current['includeCIDRs'] ?? '',
+        'exclude_cidrs': current['excludeCIDRs'] ?? '',
+      });
+      await refreshUntilSettled(expectRunning: current['running'] == true);
+      if (mounted) {
+        toast(context, context.l10n.serverChanged);
+      }
+    } catch (e) {
+      if (mounted) {
+        toast(context, e, true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          busy = false;
+          operation = '';
+        });
+      }
     }
   }
 
@@ -870,6 +972,8 @@ class _OverviewPageState extends State<OverviewPage> {
         'auto_connect': current['autoConnect'] == true,
         'auto_route': current['autoRoute'] == true,
         'session_count': sessionCount,
+        'slot2_line_id': current['slot2LineID'] ?? 0,
+        'slot3_line_id': current['slot3LineID'] ?? 0,
         'region': current['region'] ?? '',
         'exclude_regions': current['excludeRegions'] ?? '',
         'include_domains': current['includeDomains'] ?? '',
@@ -1161,9 +1265,17 @@ class AccountCard extends StatelessWidget {
 }
 
 class LinesPage extends StatefulWidget {
-  const LinesPage({super.key, required this.api, this.onSelect});
+  const LinesPage({
+    super.key,
+    required this.api,
+    this.onSelect,
+    this.allowFollowMain = false,
+    this.selectedLineID,
+  });
   final OpenSocksApi api;
   final ValueChanged<int>? onSelect;
+  final bool allowFollowMain;
+  final int? selectedLineID;
   @override
   State<LinesPage> createState() => _LinesPageState();
 }
@@ -1191,7 +1303,7 @@ class _LinesPageState extends State<LinesPage> {
         setState(() {
           lines = result[0]['lines'] ?? [];
           history = result[1]['history'] ?? [];
-          currentID = result[2]['lineID'];
+          currentID = widget.selectedLineID ?? result[2]['lineID'];
         });
       }
     } catch (e) {
@@ -1325,6 +1437,23 @@ class _LinesPageState extends State<LinesPage> {
                       ),
                     ],
                     const SizedBox(height: 6),
+                    if (widget.allowFollowMain)
+                      Card(
+                        color: currentID == 0
+                            ? Theme.of(c).colorScheme.primaryContainer
+                            : null,
+                        child: ListTile(
+                          leading: const Icon(Icons.sync_rounded),
+                          title: Text(c.l10n.followMainServer),
+                          subtitle: Text(c.l10n.followMainServerDescription),
+                          trailing: currentID == 0
+                              ? const Icon(Icons.check_circle_rounded)
+                              : null,
+                          onTap: currentID == 0
+                              ? null
+                              : () => widget.onSelect?.call(0),
+                        ),
+                      ),
                     if (!loading && lines.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(40),

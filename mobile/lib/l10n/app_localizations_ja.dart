@@ -269,4 +269,19 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get tripleMode => 'トリプルセッション';
+
+  @override
+  String get session2Server => 'セッション2のサーバー';
+
+  @override
+  String get session3Server => 'セッション3のサーバー';
+
+  @override
+  String get followMainServer => '主回線のサーバーに追従';
+
+  @override
+  String get followMainServerDescription => '主回線で選択したサーバーを自動的に使用します。';
+
+  @override
+  String get serverChanged => 'セッションのサーバーを変更しました';
 }

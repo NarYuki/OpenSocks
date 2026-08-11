@@ -274,4 +274,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get tripleMode => 'Triple mode';
+
+  @override
+  String get session2Server => 'Session 2 server';
+
+  @override
+  String get session3Server => 'Session 3 server';
+
+  @override
+  String get followMainServer => 'Follow main server';
+
+  @override
+  String get followMainServerDescription =>
+      'Automatically uses the server selected for the main connection.';
+
+  @override
+  String get serverChanged => 'Session server changed';
 }
