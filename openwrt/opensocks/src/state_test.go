@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -141,5 +142,25 @@ func TestDNSResponseKeepsEveryMatchingService(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("serviceGroupsForDNSNames() = %v, missing %v", got, want)
+	}
+}
+
+func TestHonorOfKingsDirectBattleServers(t *testing.T) {
+	for _, address := range []string{"43.129.255.150", "43.129.111.193", "43.154.252.89"} {
+		ip := net.ParseIP(address)
+		matched := false
+		for _, raw := range honorOfKingsDirectCIDRs {
+			_, network, err := net.ParseCIDR(raw)
+			if err != nil {
+				t.Fatalf("invalid Honor of Kings CIDR %q: %v", raw, err)
+			}
+			if network.Contains(ip) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			t.Fatalf("direct battle server %s is not classified", address)
+		}
 	}
 }

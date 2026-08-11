@@ -25,6 +25,15 @@ const chinaRoutesURL = "https://raw.githubusercontent.com/17mon/china_ip_list/ma
 const chinaRoutesSHA256 = "1e855b2493221becffe6261c97efce005f2cea65bf506e3c6ca1687d7e7551ad"
 const dynamicRouteTimeout = "30m"
 
+// Honor of Kings receives some battle-server addresses directly from its
+// control channel instead of resolving a game hostname. Those endpoints sit
+// outside the mainland allocation list, so DNS and GeoIP classification alone
+// cannot route or account for the match traffic.
+var honorOfKingsDirectCIDRs = []string{
+	"43.129.0.0/16",
+	"43.154.0.0/16",
+}
+
 // Startup recovery, explicit connect and the routing watchdog may converge at
 // the same time. Serialize complete table replacement so nft never appends a
 // second copy of the rules to a table another goroutine just created.
@@ -86,6 +95,7 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		script.WriteString(" }\n")
 		writeIPv4Set(&script, "include4", validCIDRs(cfg.IncludeCIDRs))
 		writeIPv4Set(&script, "exclude4", validCIDRs(cfg.ExcludeCIDRs))
+		writeIPv4Set(&script, "svc_honor_direct4", honorOfKingsDirectCIDRs)
 		for _, group := range chinaServiceGroups {
 			writeDynamicIPv4Set(&script, "svc_"+group.Name+"4", serviceIPs[group.Name])
 		}
@@ -100,6 +110,7 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		script.WriteString("  meta l4proto tcp counter " + tcpRedirect + "\n")
 	} else {
 		script.WriteString("  ip daddr @exclude4 return\n")
+		script.WriteString("  ip daddr @svc_honor_direct4 meta l4proto tcp counter " + tcpRedirect + "\n")
 		script.WriteString("  ip daddr @domain4 meta l4proto tcp counter " + tcpRedirect + "\n")
 		script.WriteString("  ip daddr @include4 meta l4proto tcp counter " + tcpRedirect + "\n")
 		script.WriteString("  ip daddr @cn4 meta l4proto tcp counter " + tcpRedirect + "\n")
@@ -117,6 +128,7 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		script.WriteString("  meta l4proto udp counter " + udpRedirect + "\n")
 	} else {
 		script.WriteString("  ip daddr @exclude4 return\n")
+		script.WriteString("  ip daddr @svc_honor_direct4 meta l4proto udp counter " + udpRedirect + "\n")
 		script.WriteString("  ip daddr @domain4 meta l4proto udp counter " + udpRedirect + "\n")
 		script.WriteString("  ip daddr @include4 meta l4proto udp counter " + udpRedirect + "\n")
 		script.WriteString("  ip daddr @cn4 meta l4proto udp counter " + udpRedirect + "\n")
@@ -130,6 +142,7 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 	if mode != "global" {
 		lan := detectLANDevice()
 		script.WriteString(" chain service_up { type filter hook input priority filter - 3; policy accept;\n")
+		script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @svc_honor_direct4 counter name svc_honor_of_kings_up return\n")
 		for _, group := range chinaServiceGroups {
 			script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @svc_" + group.Name + "4 counter name svc_" + group.Name + "_up return\n")
 		}
@@ -137,6 +150,7 @@ func setupRedirect(mode, proxyServer string, sessionCount int) error {
 		script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @include4 counter name svc_other_china_up return\n")
 		script.WriteString("  iifname \"" + lan + "\" ct original ip daddr @cn4 counter name svc_other_china_up\n")
 		script.WriteString("}\n chain service_down { type filter hook output priority filter - 3; policy accept;\n")
+		script.WriteString("  oifname \"" + lan + "\" ct original ip daddr @svc_honor_direct4 counter name svc_honor_of_kings_down return\n")
 		for _, group := range chinaServiceGroups {
 			script.WriteString("  oifname \"" + lan + "\" ct original ip daddr @svc_" + group.Name + "4 counter name svc_" + group.Name + "_down return\n")
 		}

@@ -64,59 +64,62 @@ void main() {
     },
   );
 
-  testWidgets(
-    'routing sheet applies route and session before restoring navigation',
-    (tester) async {
-      final api = _FakeApi();
-      final selectedTab = ValueNotifier<int>(0);
-      addTearDown(selectedTab.dispose);
+  testWidgets('routing items close the sheet and apply immediately', (
+    tester,
+  ) async {
+    final api = _FakeApi();
+    final selectedTab = ValueNotifier<int>(0);
+    addTearDown(selectedTab.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          locale: const Locale('en'),
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(
-            body: OverviewPage(
-              api: api,
-              selectedTab: selectedTab,
-              onOverlayVisibilityChanged: (visible) =>
-                  api.events.add('overlay:$visible'),
-            ),
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('en'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: OverviewPage(
+            api: api,
+            selectedTab: selectedTab,
+            onOverlayVisibilityChanged: (visible) =>
+                api.events.add('overlay:$visible'),
           ),
         ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byIcon(Icons.route_rounded), findsOneWidget);
-      await tester.tap(find.byIcon(Icons.route_rounded));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Full China routing'));
-      await tester.ensureVisible(find.text('Triple mode'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Triple mode'));
-      await tester.ensureVisible(find.text('Apply'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Apply'));
-      await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.route_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.route_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Full China routing'));
+    await tester.pumpAndSettle();
 
-      expect(api.events, contains('post:settings:global:3'));
-      expect(
-        api.events.indexOf('post:settings:global:3'),
-        lessThan(api.events.lastIndexOf('overlay:false')),
-      );
-      expect(find.text('Full China routing · Triple mode'), findsOneWidget);
+    expect(api.events, contains('post:settings:global:2'));
+    expect(find.text('Apply'), findsNothing);
+    expect(find.text('Full China routing · Dual mode'), findsOneWidget);
 
-      await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
-    },
-  );
+    await tester.tap(find.byIcon(Icons.route_rounded));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Triple mode'));
+    await tester.tap(find.text('Triple mode'));
+    await tester.pumpAndSettle();
+
+    expect(api.events, contains('post:settings:global:3'));
+    expect(
+      api.events.indexOf('post:settings:global:3'),
+      lessThan(api.events.lastIndexOf('overlay:false')),
+    );
+    expect(find.text('Full China routing · Triple mode'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
 
   testWidgets(
     'routing sheet restores navigation and keeps status after API failure',
@@ -150,9 +153,6 @@ void main() {
       await tester.tap(find.byIcon(Icons.route_rounded));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Full China routing'));
-      await tester.ensureVisible(find.text('Apply'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Apply'));
       await tester.pumpAndSettle();
 
       expect(api.events, contains('post:settings:global:2'));

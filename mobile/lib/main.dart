@@ -753,15 +753,13 @@ class _OverviewPageState extends State<OverviewPage> {
       return;
     }
     Map<String, dynamic>? selected;
-    var selectedMode = currentMode;
-    var selectedSessions = currentSessions;
     try {
       selected = await showModalBottomSheet<Map<String, dynamic>>(
         context: context,
         useSafeArea: true,
         showDragHandle: true,
         builder: (sheetContext) => StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
+          builder: (sheetContext, _) {
             return SafeArea(
               child: SingleChildScrollView(
                 child: Padding(
@@ -777,26 +775,30 @@ class _OverviewPageState extends State<OverviewPage> {
                       ),
                       const SizedBox(height: 8),
                       ListTile(
-                        selected: selectedMode == 'smart',
+                        selected: currentMode == 'smart',
                         title: Text(sheetContext.l10n.smartRouting),
                         subtitle: Text(sheetContext.l10n.smartDescription),
                         leading: const Icon(Icons.alt_route_rounded),
-                        trailing: selectedMode == 'smart'
+                        trailing: currentMode == 'smart'
                             ? const Icon(Icons.check_circle_rounded)
                             : null,
-                        onTap: () =>
-                            setSheetState(() => selectedMode = 'smart'),
+                        onTap: () => Navigator.pop(sheetContext, {
+                          'mode': 'smart',
+                          'sessions': currentSessions,
+                        }),
                       ),
                       ListTile(
-                        selected: selectedMode == 'global',
+                        selected: currentMode == 'global',
                         title: Text(sheetContext.l10n.globalRouting),
                         subtitle: Text(sheetContext.l10n.globalDescription),
                         leading: const Icon(Icons.public_rounded),
-                        trailing: selectedMode == 'global'
+                        trailing: currentMode == 'global'
                             ? const Icon(Icons.check_circle_rounded)
                             : null,
-                        onTap: () =>
-                            setSheetState(() => selectedMode = 'global'),
+                        onTap: () => Navigator.pop(sheetContext, {
+                          'mode': 'global',
+                          'sessions': currentSessions,
+                        }),
                       ),
                       const Divider(),
                       Text(
@@ -810,7 +812,7 @@ class _OverviewPageState extends State<OverviewPage> {
                         (3, sheetContext.l10n.tripleMode),
                       ])
                         ListTile(
-                          selected: selectedSessions == option.$1,
+                          selected: currentSessions == option.$1,
                           leading: Icon(
                             option.$1 == 1
                                 ? Icons.looks_one_rounded
@@ -819,20 +821,14 @@ class _OverviewPageState extends State<OverviewPage> {
                                 : Icons.looks_3_rounded,
                           ),
                           title: Text(option.$2),
-                          trailing: selectedSessions == option.$1
+                          trailing: currentSessions == option.$1
                               ? const Icon(Icons.check_circle_rounded)
                               : null,
-                          onTap: () =>
-                              setSheetState(() => selectedSessions = option.$1),
+                          onTap: () => Navigator.pop(sheetContext, {
+                            'mode': currentMode,
+                            'sessions': option.$1,
+                          }),
                         ),
-                      const SizedBox(height: 8),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(sheetContext, {
-                          'mode': selectedMode,
-                          'sessions': selectedSessions,
-                        }),
-                        child: Text(sheetContext.l10n.apply),
-                      ),
                     ],
                   ),
                 ),
