@@ -35,6 +35,8 @@ opkg install opensocks-minimal luci-app-opensocks
 
 [GitHub Releases](https://github.com/NarYuki/OpenSocks/releases/latest)からIPKを直接ダウンロードしてインストールすることもできます。インストール、ログイン、機能、スマホ連携の詳しい説明:
 
+完全版パッケージは複数 CPU アーキテクチャ向けに公開されます（例: `mipsel_24kc`、`aarch64_cortex-a53`、`aarch64_cortex-a53_neon-vfpv4`）。`opensocks-minimal` は `all` のまま、`uname -m` に応じた daemon バイナリを選択します。
+
 - [日本語 Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-ja)
 - [English Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-en)
 - [中文 Wiki](https://github.com/NarYuki/OpenSocks/wiki)

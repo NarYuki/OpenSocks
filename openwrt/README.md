@@ -92,6 +92,20 @@ overlayへ保存し、署名済みリリースの`opensocks-linux-mipsle.gz`をS
 
 `auto_connect` が有効なら、デーモンが起動時に保存済みトークンで Free 回線へ自動接続します。
 
+## マルチアーキテクチャ release
+
+`tools/build-release.sh` は複数 GOARCH の daemon をビルドできます（既定: `mipsle` と `arm64`）。
+
+- 完全版 IPK: `opensocks_*_<opkg-arch>.ipk`（同一 arm64 バイナリを `aarch64_cortex-a53` と `aarch64_cortex-a53_neon-vfpv4` の両方に梱包）
+- ブート用バイナリ: `opensocks-linux-mipsle.gz` / `opensocks-linux-arm64.gz`
+- `opensocks-minimal` は `Architecture: all` のまま、実行時に `uname -m` で対応バイナリを選択
+
+追加ターゲット例:
+
+```sh
+OPENSOCKS_TARGETS='mipsle:softfloat mipsle mipsel_24kc;arm64 arm64 aarch64_cortex-a53 aarch64_cortex-a53_neon-vfpv4;arm:7 arm arm_cortex-a7_neon-vfpv4'   ./tools/build-release.sh
+```
+
 ## ライセンス
 
 GPL-3.0 (mihomo / clash エコシステムとの整合性のため)。
