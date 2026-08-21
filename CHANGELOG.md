@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.12
+
+### OpenWrt platforms
+
+- Added signed daemon and full-package builds for mipsel and arm64 routers.
+- Added package architecture aliases for stock OpenWrt and GL.iNet arm64 firmware.
+- Made the minimal package select only a verified binary matching the router CPU.
+- Kept existing mipsel minimal installations compatible with the previous release metadata.
+
+### Release delivery
+
+- Added multi-architecture assets to the signed opkg feed synchronization.
+- Skipped synchronization when the same release is already active to prevent duplicate downloads and storage growth.
+
 ## 0.2.11
 
 ### Session servers
