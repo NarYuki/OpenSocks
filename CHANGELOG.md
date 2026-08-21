@@ -4,6 +4,7 @@
 
 ### OpenWrt platforms
 
+- Merged multi-architecture OpenWrt package support contributed by [@haotian-lu-prog](https://github.com/haotian-lu-prog) in [#2](https://github.com/NarYuki/OpenSocks/pull/2).
 - Fixed minimal-package CPU detection on little-endian MIPS routers whose kernel reports the generic `mips` architecture name.
 - Continued to reject binaries whose CPU architecture or byte order does not match the router.
 
