@@ -174,19 +174,31 @@ cat > "$minimal_control/postinst" <<EOF
 
 detect_suffix() {
 	case "\$(uname -m)" in
-		mips|mipsel) printf '%s\n' mipsle ;;
+		mipsel) printf '%s\n' mipsle ;;
+		mips) printf '%s\n' mips ;;
+		mips64el) printf '%s\n' mips64le ;;
+		mips64) printf '%s\n' mips64 ;;
 		aarch64|arm64) printf '%s\n' arm64 ;;
-		armv7l|armv6l|arm) printf '%s\n' arm ;;
+		armv7l|arm) printf '%s\n' arm ;;
+		armv6l) printf '%s\n' arm6 ;;
 		x86_64|amd64) printf '%s\n' amd64 ;;
+		i386|i486|i586|i686) printf '%s\n' 386 ;;
 		*) return 1 ;;
 	esac
 }
 
-_suffix="\$(detect_suffix 2>/dev/null || true)"
-_sha='$default_sha'
-_url='$default_url'
+_suffix="\$(detect_suffix 2>/dev/null)" || {
+	echo "OpenSocks does not support CPU architecture: \$(uname -m)" >&2
+	exit 1
+}
+_sha=''
+_url=''
 case "\${_suffix}" in${arch_postinst_case}
 esac
+[ -n "\${_sha}" ] && [ -n "\${_url}" ] || {
+	echo "This OpenSocks release has no binary for CPU architecture: \$(uname -m)" >&2
+	exit 1
+}
 
 uci set opensocks.settings.binary_url="\${_url}"
 uci set opensocks.settings.binary_sha256="\${_sha}"
