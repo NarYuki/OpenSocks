@@ -19,6 +19,16 @@ case "$tag" in
 esac
 version="${tag#v}"
 
+# Releases are immutable. If this exact tag is already the active generation,
+# do not download and republish identical assets on every timer invocation.
+current_generation="$(readlink "$publish_root/opkg" 2>/dev/null || true)"
+case "$current_generation" in
+	".opkg-$tag-"*)
+		printf 'OpenSocks Release %s is already active; skipping synchronization\n' "$tag"
+		exit 0
+		;;
+esac
+
 command -v curl >/dev/null
 command -v jq >/dev/null
 test -x "$usign_bin"
@@ -36,29 +46,54 @@ done
 test "$("$usign_bin" -F -p "$stage/$public_key_fingerprint")" = "$public_key_fingerprint"
 "$usign_bin" -V -m "$stage/Packages" -p "$stage/$public_key_fingerprint" -x "$stage/Packages.sig"
 
-package_asset() {
-	package="$1"
-	awk -v wanted="$package" '
+# Collect every Filename basenames referenced by the signed Packages index.
+package_assets="$(
+	awk '
 		BEGIN { RS=""; FS="\n" }
-		$0 ~ "(^|\\n)Package: " wanted "(\\n|$)" {
-			for (i = 1; i <= NF; i++)
+		{
+			for (i = 1; i <= NF; i++) {
 				if ($i ~ /^Filename: by-sha\//) {
 					sub(/^Filename: by-sha\/[0-9a-f]+\//, "", $i)
 					print $i
-					exit
 				}
+			}
 		}
-	' "$stage/Packages"
+	' "$stage/Packages" | sort -u
+)"
+
+# Also publish every gzipped daemon binary listed in SHA256SUMS.
+binary_assets="$(
+	awk '
+		{
+			name=$2
+			sub(/^\.\//, "", name)
+			if (name ~ /^opensocks-linux-.*\.gz$/) print name
+		}
+	' "$stage/SHA256SUMS" | sort -u
+)"
+
+assets="$(printf '%s\n%s\n' "$package_assets" "$binary_assets" | awk 'NF && !seen[$0]++')"
+[ -n "$assets" ] || {
+	printf 'No package assets found in Packages/SHA256SUMS\n' >&2
+	exit 1
 }
 
-package_assets="$(package_asset luci-app-opensocks) $(package_asset opensocks-minimal) $(package_asset opensocks)"
-for asset in $package_assets opensocks-linux-mipsle.gz; do
+printf '%s\n' "$assets" > "$stage/.asset-list"
+while IFS= read -r asset; do
+	[ -n "$asset" ] || continue
 	case "$asset" in
-		luci-app-opensocks_${version}-*_all.ipk|opensocks-minimal_${version}-*_all.ipk|opensocks_${version}-*_mipsel_24kc.ipk|opensocks-linux-mipsle.gz) ;;
-		*) printf 'Invalid release asset from Packages: %s\n' "$asset" >&2; exit 1 ;;
+		luci-app-opensocks_${version}-*_all.ipk) ;;
+		opensocks-minimal_${version}-*_all.ipk) ;;
+		opensocks_${version}-*_*.ipk) ;;
+		opensocks-linux-*.gz) ;;
+		*)
+			printf 'Unexpected release asset from index: %s\n' "$asset" >&2
+			exit 1
+			;;
 	esac
 	curl -fL --retry 3 --connect-timeout 15 -o "$stage/$asset" "$base/$asset?cache=$cache_bust"
-done
+done < "$stage/.asset-list"
+rm -f "$stage/.asset-list"
 
 "$usign_bin" -V -m "$stage/SHA256SUMS" -p "$stage/$public_key_fingerprint" -x "$stage/SHA256SUMS.sig"
 (cd "$stage" && sha256sum -c SHA256SUMS)

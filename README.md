@@ -35,6 +35,9 @@ opkg install opensocks-minimal luci-app-opensocks
 
 也可以从 [GitHub Releases](https://github.com/NarYuki/OpenSocks/releases/latest) 下载 IPK 后直接安装。完整的安装、登录、功能和手机配对说明请参阅：
 
+完整包现同时提供多种 CPU 架构（例如 `mipsel_24kc`、`aarch64_cortex-a53`、`aarch64_cortex-a53_neon-vfpv4`）。`opensocks-minimal` 仍为 `all` 架构，会按 `uname -m` 自动选择对应的 daemon 二进制。
+
+
 - [中文 Wiki](https://github.com/NarYuki/OpenSocks/wiki)
 - [English Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-en)
 - [日本語 Wiki](https://github.com/NarYuki/OpenSocks/wiki/Home-ja)

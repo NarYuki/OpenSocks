@@ -80,7 +80,15 @@ jobs:
           test -s "$RELEASE_DIR/SHA256SUMS"
           test -s "$RELEASE_DIR/SHA256SUMS.sig"
           test -s "$RELEASE_DIR/d24a5e234001294c"
-          test "$(find "$RELEASE_DIR" -maxdepth 1 -name '*.ipk' | wc -l)" -eq 3
+          ipk_count="$(find "$RELEASE_DIR" -maxdepth 1 -name '*.ipk' | wc -l | tr -d ' ')"
+          # multi-arch: luci + minimal + at least mipsel and one aarch64 opensocks package
+          test "$ipk_count" -ge 4
+          test -s "$RELEASE_DIR/opensocks-linux-mipsle.gz"
+          test -s "$RELEASE_DIR/opensocks-linux-arm64.gz"
+          test -n "$(find "$RELEASE_DIR" -maxdepth 1 -name 'opensocks_*_mipsel_24kc.ipk')"
+          test -n "$(find "$RELEASE_DIR" -maxdepth 1 -name 'opensocks_*_aarch64_cortex-a53*.ipk')"
+          grep -q 'X-OpenSocks-Binary-SHA256-arm64:' "$RELEASE_DIR/Packages"
+          grep -q 'X-OpenSocks-Binary-URL-arm64:' "$RELEASE_DIR/Packages"
           gzip -t "$RELEASE_DIR/Packages.gz"
           (cd "$RELEASE_DIR" && shasum -a 256 -c SHA256SUMS)
           "${RUNNER_TEMP}/usign/build/usign" -V -m "$RELEASE_DIR/Packages" -p "$GITHUB_WORKSPACE/keys/d24a5e234001294c" -x "$RELEASE_DIR/Packages.sig"
