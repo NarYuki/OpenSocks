@@ -10,7 +10,16 @@ feed_key="/etc/opkg/keys/d24a5e234001294c"
 detect_binary_suffix() {
 	case "$(uname -m)" in
 		mipsel) printf '%s\n' mipsle ;;
-		mips) printf '%s\n' mips ;;
+		mips)
+			# Some little-endian OpenWrt kernels report only "mips". Read the
+			# ELF EI_DATA byte instead of guessing the byte order from uname.
+			elf_data="$(od -An -j 5 -N 1 -tu1 /bin/busybox 2>/dev/null | tr -d ' ')"
+			case "$elf_data" in
+				1) printf '%s\n' mipsle ;;
+				2) printf '%s\n' mips ;;
+				*) return 1 ;;
+			esac
+			;;
 		mips64el) printf '%s\n' mips64le ;;
 		mips64) printf '%s\n' mips64 ;;
 		aarch64|arm64) printf '%s\n' arm64 ;;

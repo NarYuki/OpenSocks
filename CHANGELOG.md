@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.13
+
+### OpenWrt platforms
+
+- Fixed minimal-package CPU detection on little-endian MIPS routers whose kernel reports the generic `mips` architecture name.
+- Continued to reject binaries whose CPU architecture or byte order does not match the router.
+
 ## 0.2.12
 
 ### OpenWrt platforms

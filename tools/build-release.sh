@@ -2,7 +2,7 @@
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-0.2.12}"
+VERSION="${VERSION:-0.2.13}"
 RELEASE="${RELEASE:-1}"
 OUT="${RELEASE_DIR:-$ROOT/../release/$VERSION}"
 WORK="$(mktemp -d)"
@@ -175,7 +175,14 @@ cat > "$minimal_control/postinst" <<EOF
 detect_suffix() {
 	case "\$(uname -m)" in
 		mipsel) printf '%s\n' mipsle ;;
-		mips) printf '%s\n' mips ;;
+		mips)
+			elf_data="\$(od -An -j 5 -N 1 -tu1 /bin/busybox 2>/dev/null | tr -d ' ')"
+			case "\$elf_data" in
+				1) printf '%s\n' mipsle ;;
+				2) printf '%s\n' mips ;;
+				*) return 1 ;;
+			esac
+			;;
 		mips64el) printf '%s\n' mips64le ;;
 		mips64) printf '%s\n' mips64 ;;
 		aarch64|arm64) printf '%s\n' arm64 ;;
