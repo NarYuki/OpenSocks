@@ -85,8 +85,8 @@ jobs:
           test "$ipk_count" -ge 4
           test -s "$RELEASE_DIR/opensocks-linux-mipsle.gz"
           test -s "$RELEASE_DIR/opensocks-linux-arm64.gz"
-          test -n "$(find "$RELEASE_DIR" -maxdepth 1 -name 'opensocks_*-mipsel_24kc.ipk')"
-          test -n "$(find "$RELEASE_DIR" -maxdepth 1 -name 'opensocks_*-aarch64_cortex-a53*.ipk')"
+          test -n "$(find "$RELEASE_DIR" -maxdepth 1 -name 'opensocks_*_mipsel_24kc.ipk')"
+          test -n "$(find "$RELEASE_DIR" -maxdepth 1 -name 'opensocks_*_aarch64_cortex-a53*.ipk')"
           grep -q 'X-OpenSocks-Binary-SHA256-arm64:' "$RELEASE_DIR/Packages"
           grep -q 'X-OpenSocks-Binary-URL-arm64:' "$RELEASE_DIR/Packages"
           gzip -t "$RELEASE_DIR/Packages.gz"
