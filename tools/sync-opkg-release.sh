@@ -19,6 +19,16 @@ case "$tag" in
 esac
 version="${tag#v}"
 
+# Releases are immutable. If this exact tag is already the active generation,
+# do not download and republish identical assets on every timer invocation.
+current_generation="$(readlink "$publish_root/opkg" 2>/dev/null || true)"
+case "$current_generation" in
+	".opkg-$tag-"*)
+		printf 'OpenSocks Release %s is already active; skipping synchronization\n' "$tag"
+		exit 0
+		;;
+esac
+
 command -v curl >/dev/null
 command -v jq >/dev/null
 test -x "$usign_bin"
