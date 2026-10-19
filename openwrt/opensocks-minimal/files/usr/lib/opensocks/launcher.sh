@@ -13,7 +13,7 @@ detect_binary_suffix() {
 		mips)
 			# Some little-endian OpenWrt kernels report only "mips". Read the
 			# ELF EI_DATA byte instead of guessing the byte order from uname.
-			elf_data="$(od -An -j 5 -N 1 -tu1 /bin/busybox 2>/dev/null | tr -d ' ')"
+			elf_data="$(hexdump -s 5 -n 1 -e '1/1 "%u"' /bin/busybox 2>/dev/null)"
 			case "$elf_data" in
 				1) printf '%s\n' mipsle ;;
 				2) printf '%s\n' mips ;;
