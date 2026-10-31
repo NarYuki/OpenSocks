@@ -71,6 +71,20 @@ type controller struct {
 	linesMu   sync.RWMutex
 	lines     []line
 	lastAuth  time.Time
+
+	// autoRouteOff is set while automatic recovery must stay out of the way.
+	//
+	// autoRouteWatchdog reconnects whenever the engine is not running, which is
+	// what makes the tunnel survive a dropped upstream. It also made "Disconnect"
+	// impossible: the disconnect tore the engine down, and up to ten seconds later
+	// the watchdog dialled the control API again and put everything back, so the
+	// tunnel reappeared by itself. Recovery is therefore suspended while a
+	// disconnect is in progress, and stays suspended until something asks to
+	// connect again.
+	autoRouteOff bool
+	// autoRouteOffUntil re-arms recovery after a bounded pause, so a disconnect
+	// that the user forgot about cannot leave the router unmanaged forever.
+	autoRouteOffUntil time.Time
 }
 
 func newController(cfg *settings) *controller {
@@ -364,6 +378,9 @@ func (c *controller) pickLine(lines []line, wantID int) (*line, error) {
 func (c *controller) connect(wantID int) error {
 	c.connectMu.Lock()
 	defer c.connectMu.Unlock()
+	// An explicit connect always overrides an earlier disconnect, including the
+	// automatic retry the watchdog performs once its pause expires.
+	c.resumeAutoRoute()
 	c.refreshSettings()
 	cfg := c.currentSettings()
 	switching := false
@@ -461,11 +478,54 @@ func (c *controller) reconnect(historyID string) error {
 	return c.connect(record.LineID)
 }
 
+// autoRoutePause is how long a manual disconnect suspends automatic recovery.
+// It only has to outlast the watchdog's reaction (one 10 s tick, plus the time a
+// connect can take), because the next explicit connect clears the flag anyway.
+// The bound exists so a forgotten disconnect cannot disable recovery forever.
+const autoRoutePause = 2 * time.Minute
+
 func (c *controller) disconnect() error {
+	// Suspend recovery FIRST. The watchdog runs on its own goroutine, so a tick
+	// landing between "stop the engine" and "clear the flag" would reconnect
+	// before the flag was ever consulted.
+	c.suspendAutoRoute()
 	c.refreshSettings()
 	c.engine.stop()
 	teardownRedirect()
 	return nil
+}
+
+// suspendAutoRoute stops the watchdog from reconnecting for autoRoutePause.
+func (c *controller) suspendAutoRoute() {
+	c.cfgMu.Lock()
+	c.autoRouteOff = true
+	c.autoRouteOffUntil = time.Now().Add(autoRoutePause)
+	c.cfgMu.Unlock()
+}
+
+// resumeAutoRoute re-enables recovery. Called by every path that connects, so an
+// explicit connect always wins over an earlier disconnect.
+func (c *controller) resumeAutoRoute() {
+	c.cfgMu.Lock()
+	c.autoRouteOff = false
+	c.autoRouteOffUntil = time.Time{}
+	c.cfgMu.Unlock()
+}
+
+// autoRouteSuspended reports whether recovery should stay idle right now.
+func (c *controller) autoRouteSuspended() bool {
+	c.cfgMu.Lock()
+	defer c.cfgMu.Unlock()
+	if !c.autoRouteOff {
+		return false
+	}
+	if !c.autoRouteOffUntil.IsZero() && time.Now().After(c.autoRouteOffUntil) {
+		// The pause elapsed; let recovery resume rather than staying off forever.
+		c.autoRouteOff = false
+		c.autoRouteOffUntil = time.Time{}
+		return false
+	}
+	return true
 }
 
 // status returns the current state for the web UI.
@@ -523,6 +583,11 @@ func (c *controller) autoRouteWatchdog() {
 	backoff, nextAttempt := 10*time.Second, time.Time{}
 	for range ticker.C {
 		if currentSpeedJob().Running {
+			continue
+		}
+		// A manual disconnect must survive the watchdog. Without this the tunnel
+		// came back within one tick and "Disconnect" did nothing observable.
+		if c.autoRouteSuspended() {
 			continue
 		}
 		c.refreshSettings()

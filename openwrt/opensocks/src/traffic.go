@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -36,15 +35,17 @@ var trafficState struct {
 	UpRate, DownRate float64
 }
 
+// readNFTCounters returns every counter of the opensocks table in one call.
+//
+// Do not feed several "list counter" lines to `nft -f -`: on nftables 1.1.6
+// (OpenWrt 25.12) the first line resolves but the following ones fail with
+// "No such file or directory; did you mean obj ...", so the whole command exits
+// non-zero and the counters read as zero. The traffic panel then shows 0 B/s
+// while the kernel counters move gigabytes.
+//
+// `list counters inet <table>` dumps all of them at once and is what this uses.
 func readNFTCounters() map[string]uint64 {
-	var commands strings.Builder
-	commands.WriteString("list counter inet opensocks proxy_up\nlist counter inet opensocks proxy_down\n")
-	for _, g := range chinaServiceGroups {
-		commands.WriteString("list counter inet opensocks svc_" + g.Name + "_up\nlist counter inet opensocks svc_" + g.Name + "_down\n")
-	}
-	commands.WriteString("list counter inet opensocks svc_other_china_up\nlist counter inet opensocks svc_other_china_down\n")
-	cmd := exec.Command("nft", "-f", "-")
-	cmd.Stdin = strings.NewReader(commands.String())
+	cmd := exec.Command("nft", "list", "counters", "inet", "opensocks")
 	out, err := cmd.Output()
 	if err != nil {
 		return map[string]uint64{}
